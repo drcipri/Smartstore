@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Reflection;
 using Autofac;
 using Microsoft.AspNetCore.Http;
@@ -61,7 +62,7 @@ namespace Smartstore.Admin.Controllers
         private readonly IHostApplicationLifetime _appLifetime;
         private readonly AsyncRunner _asyncRunner;
         private readonly IMediaService _mediaService;
-        
+
         public MaintenanceController(
             SmartDbContext db,
             IMemoryCache memCache,
@@ -526,7 +527,7 @@ namespace Smartstore.Admin.Controllers
                 if (_db.DataProvider.CanOptimizeTable)
                 {
                     await _db.DataProvider.OptimizeTableAsync(tableName);
-                    
+
                     var tableInfos = await CommonHelper.TryAction(() => _db.DataProvider.ReadTableInfosAsync(), []);
                     var currentSize = tableInfos.FirstOrDefault(x => x.TableName == tableName)?.TotalSpace;
 
@@ -535,9 +536,9 @@ namespace Smartstore.Admin.Controllers
                         var diffBytes = currentSize.Value - size.Value;
                         var diffPercent = Math.Round(diffBytes / (double)currentSize, 2);
 
-                        NotifySuccess(T("Common.OptimizeTableSuccess", 
-                            tableName, 
-                            Prettifier.HumanizeBytes(size.Value), 
+                        NotifySuccess(T("Common.OptimizeTableSuccess",
+                            tableName,
+                            Prettifier.HumanizeBytes(size.Value),
                             Prettifier.HumanizeBytes(currentSize.Value),
                             Prettifier.HumanizeBytes(diffBytes),
                             "<b>" + diffPercent.ToString("P2") + "</b>"));
@@ -811,6 +812,14 @@ namespace Smartstore.Admin.Controllers
                 AddEntry(SystemWarningLevel.Pass, T("Admin.System.Warnings.AttributeCombinationHashCodes.OK"));
             }
 
+            // EU-VAT Web service
+            // ====================================
+            if (HttpContext.Connection.LocalIpAddress.AddressFamily != AddressFamily.InterNetwork)
+            {
+                // EU-VAT check may fail on non-IPv4 addresses (e.g. IPv6 only)
+                AddEntry(SystemWarningLevel.Fail, T("Admin.System.Warnings.EuVatWebService.Unstable"));
+            }
+
             return View(model);
 
             void AddEntry(SystemWarningLevel level, string text)
@@ -1037,12 +1046,9 @@ namespace Smartstore.Admin.Controllers
         #region Performance settings
 
         [Permission(Permissions.Configuration.Setting.Read)]
-        [LoadSetting]
+        [LoadSetting(hasStoreScope: false)]
         public async Task<IActionResult> PerformanceSettings(PerformanceSettings performanceSettings, ResiliencySettings resiliencySettings)
         {
-            // These settings have no store scope configuration.
-            Services.WorkContext.CurrentCustomer.GenericAttributes.AdminAreaStoreScopeConfiguration = 0;
-
             var model = new PerformanceSettingsModel();
 
             // Map entities to model
@@ -1053,7 +1059,7 @@ namespace Smartstore.Admin.Controllers
         }
 
         [Permission(Permissions.Configuration.Setting.Update)]
-        [HttpPost, SaveSetting, FormValueRequired("save")]
+        [HttpPost, SaveSetting(hasStoreScope: false), FormValueRequired("save")]
         public async Task<IActionResult> PerformanceSettings(
             PerformanceSettingsModel model,
             PerformanceSettings performanceSettings,

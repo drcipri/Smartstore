@@ -36,7 +36,7 @@ namespace Smartstore.Admin.Models.Catalog
         [LocalizedDisplay("*Picture")]
         public int PictureId { get; set; }
 
-        public List<SpecificationAttributeOptionLocalizedModel> Locales { get; set; } = new();
+        public List<SpecificationAttributeOptionLocalizedModel> Locales { get; set; } = [];
     }
 
     [LocalizedDisplay("Admin.Catalog.Attributes.SpecificationAttributes.Options.Fields.")]
@@ -51,31 +51,30 @@ namespace Smartstore.Admin.Models.Catalog
         public string Alias { get; set; }
     }
 
-    public partial class SpecificationAttributeOptionValidator : AbstractValidator<SpecificationAttributeOptionModel>
+    public partial class SpecificationAttributeOptionValidator : SmartValidator<SpecificationAttributeOptionModel>
     {
-        public SpecificationAttributeOptionValidator()
+        public SpecificationAttributeOptionValidator(SmartDbContext db)
         {
-            RuleFor(x => x.Name).NotEmpty();
+            ApplyEntityRules<SpecificationAttributeOption>(db);
         }
     }
 
-    [Mapper(Lifetime = ServiceLifetime.Singleton)]
     public class SpecificationAttributeOptionMapper :
         IMapper<SpecificationAttributeOption, SpecificationAttributeOptionModel>,
         IMapper<SpecificationAttributeOptionModel, SpecificationAttributeOption>
     {
-        public Task MapAsync(SpecificationAttributeOptionModel from, SpecificationAttributeOption to, dynamic parameters = null)
-        {
-            MiniMapper.Map(from, to);
-            to.MediaFileId = from.PictureId;
-
-            return Task.CompletedTask;
-        }
-
         public Task MapAsync(SpecificationAttributeOption from, SpecificationAttributeOptionModel to, dynamic parameters = null)
         {
             MiniMapper.Map(from, to);
             to.PictureId = from.MediaFileId;
+
+            return Task.CompletedTask;
+        }
+
+        public Task MapAsync(SpecificationAttributeOptionModel from, SpecificationAttributeOption to, dynamic parameters = null)
+        {
+            MiniMapper.Map(from, to);
+            to.MediaFileId = from.PictureId;
 
             return Task.CompletedTask;
         }

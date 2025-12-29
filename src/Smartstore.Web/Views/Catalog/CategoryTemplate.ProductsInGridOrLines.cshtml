@@ -19,13 +19,13 @@
 
     async Task SubCategoryList()
     {
-        <div class="artlist artlist-grid artlist-4-cols artlist-boxed artlist-sub-categories@(Model.SubCategoryDisplayType == SubCategoryDisplayType.AboveProductList ? " hide-on-active-filter" : "")">
+        <div class="artlist artlist-grid artlist-4-cols artlist-boxed artlist-sub-categories@(Model.SubCategoryDisplayType == SubCategoryDisplayType.AboveProductList ? " hide-on-active-filter" : "")" role="list">
             @foreach (var item in Model.SubCategories)
             {
                 var image = item.Image;
                 var linkTitle = T("Media.Category.ImageLinkTitleFormat", item.Name);
 
-                <article class="art" data-id="@item.Id">
+                <div class="art" data-id="@item.Id" role="listitem">
                     <div class="art-picture-block">
                         @if (image.HasImage())
                         {
@@ -39,7 +39,7 @@
                             <span sm-language-attributes-for="item.Name">@item.Name</span>
                         </a>
                     </div>
-                </article>
+                </div>
             }
         </div>
     }
@@ -87,9 +87,9 @@
         {
             <zone name="categorydetails_before_featured_products" />
 
-            <div class="product-grid featured-product-grid block hide-on-active-filter">
+            <div role="region" aria-labelledby="featured-products-title" class="product-grid featured-product-grid block hide-on-active-filter">
                 <div class="heading heading-center">
-                    <h3 class="heading-title fs-h1">@T("Products.FeaturedProducts")</h3>
+                    <h3 id="featured-products-title" class="heading-title fs-h1">@T("Products.FeaturedProducts")</h3>
                 </div>
                 <div class="block-body pt-3 artlist-no-separators">
                     <partial name="Product.List" model="Model.FeaturedProducts" />

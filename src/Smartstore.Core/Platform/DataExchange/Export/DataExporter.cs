@@ -137,11 +137,6 @@ namespace Smartstore.Core.DataExchange.Export
         public Localizer T { get; set; } = NullLocalizer.Instance;
 
         /// <summary>
-        /// The name of the wwwroot subfolder where export files are to be exported to be publicly accessible.
-        /// </summary>
-        public static string PublicDirectoryName => "exchange";
-
-        /// <summary>
         /// The page size for loading data from database during export.
         /// </summary>
         public static int PageSize => 100;
@@ -1156,6 +1151,7 @@ namespace Smartstore.Core.DataExchange.Export
                     var psa = context.SpecificationAttributes.SelectMany(x => x.Value);
                     var sao = psa.Select(x => x.SpecificationAttributeOption);
                     var sa = psa.Select(x => x.SpecificationAttributeOption.SpecificationAttribute);
+                    var cg = sa.Select(x => x.CollectionGroupMapping?.CollectionGroup).Where(x => x != null);
 
                     var pva = context.Attributes.SelectMany(x => x.Value);
                     var pvav = pva.SelectMany(x => x.ProductVariantAttributeValues);
@@ -1165,6 +1161,7 @@ namespace Smartstore.Core.DataExchange.Export
                     ctx.TranslationsPerPage[nameof(ProductBundleItem)] = await CreateTranslationCollection(nameof(ProductBundleItem), context.ProductBundleItems.SelectMany(x => x.Value));
                     ctx.TranslationsPerPage[nameof(SpecificationAttribute)] = await CreateTranslationCollection(nameof(SpecificationAttribute), sa);
                     ctx.TranslationsPerPage[nameof(SpecificationAttributeOption)] = await CreateTranslationCollection(nameof(SpecificationAttributeOption), sao);
+                    ctx.TranslationsPerPage[nameof(CollectionGroup)] = await CreateTranslationCollection(nameof(CollectionGroup), cg);
                     ctx.TranslationsPerPage[nameof(ProductAttribute)] = await CreateTranslationCollection(nameof(ProductAttribute), pa);
                     ctx.TranslationsPerPage[nameof(ProductVariantAttributeValue)] = await CreateTranslationCollection(nameof(ProductVariantAttributeValue), pvav);
                 }

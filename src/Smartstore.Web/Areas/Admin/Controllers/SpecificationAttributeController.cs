@@ -1,6 +1,7 @@
 ﻿using Smartstore.Admin.Models.Catalog;
 using Smartstore.ComponentModel;
 using Smartstore.Core.Catalog.Attributes;
+using Smartstore.Core.Common.Services;
 using Smartstore.Core.Localization;
 using Smartstore.Core.Logging;
 using Smartstore.Core.Rules.Filters;
@@ -15,11 +16,15 @@ namespace Smartstore.Admin.Controllers
     {
         private readonly SmartDbContext _db;
         private readonly ILocalizedEntityService _localizedEntityService;
+        private readonly ICollectionGroupService _collectionGroupService;
 
-        public SpecificationAttributeController(SmartDbContext db, ILocalizedEntityService localizedEntityService)
+        public SpecificationAttributeController(SmartDbContext db, 
+            ILocalizedEntityService localizedEntityService,
+            ICollectionGroupService collectionGroupService)
         {
             _db = db;
             _localizedEntityService = localizedEntityService;
+            _collectionGroupService = collectionGroupService;
         }
 
         // AJAX.
@@ -56,7 +61,9 @@ namespace Smartstore.Admin.Controllers
                 {
                     Id = x.Id.ToString(),
                     Text = x.Name,
-                    Selected = ids.Contains(x.Id)
+                    Selected = ids.Contains(x.Id),
+                    UrlTitle = T("Admin.Catalog.Attributes.SpecificationAttributes.EditAttributeDetails"),
+                    Url = Url.Action(nameof(Edit), "SpecificationAttribute", new { id = x.Id, area = "Admin" })
                 })
                 .ToList();
 
@@ -130,28 +137,31 @@ namespace Smartstore.Admin.Controllers
         {
             var language = Services.WorkContext.WorkingLanguage;
             var mapper = MapperFactory.GetMapper<SpecificationAttribute, SpecificationAttributeModel>();
-            var query = _db.SpecificationAttributes.AsNoTracking();
+            var query = _db.SpecificationAttributes
+                .Include(x => x.CollectionGroupMapping)
+                .ThenInclude(x => x.CollectionGroup)
+                .AsNoTracking();
 
             if (model.SearchName.HasValue())
             {
                 query = query.ApplySearchFilterFor(x => x.Name, model.SearchName);
             }
-
             if (model.SearchAlias.HasValue())
             {
                 query = query.ApplySearchFilterFor(x => x.Alias, model.SearchAlias);
             }
-
+            if (model.SearchCollectionGroupName.HasValue())
+            {
+                query = query.ApplySearchFilterFor(x => x.CollectionGroupMapping.CollectionGroup.Name, model.SearchCollectionGroupName);
+            }
             if (model.SearchAllowFiltering.HasValue)
             {
                 query = query.Where(x => x.AllowFiltering == model.SearchAllowFiltering.Value);
             }
-
             if (model.SearchShowOnProductPage.HasValue)
             {
                 query = query.Where(x => x.ShowOnProductPage == model.SearchShowOnProductPage.Value);
             }
-
             if (model.SearchEssential.HasValue)
             {
                 query = query.Where(x => x.Essential == model.SearchEssential.Value);
@@ -233,21 +243,29 @@ namespace Smartstore.Admin.Controllers
         {
             if (ModelState.IsValid)
             {
-                var mapper = MapperFactory.GetMapper<SpecificationAttributeModel, SpecificationAttribute>();
-                var attribute = await mapper.MapAsync(model);
-                _db.SpecificationAttributes.Add(attribute);
+                try
+                {
+                    var mapper = MapperFactory.GetMapper<SpecificationAttributeModel, SpecificationAttribute>();
+                    var attribute = await mapper.MapAsync(model);
+                    _db.SpecificationAttributes.Add(attribute);
 
-                await _db.SaveChangesAsync();
+                    await _db.SaveChangesAsync();
 
-                await ApplyLocales(model, attribute);
-                await _db.SaveChangesAsync();
+                    await _collectionGroupService.ApplyCollectionGroupNameAsync(attribute, model.CollectionGroupName);
+                    await ApplyLocales(model, attribute);
+                    await _db.SaveChangesAsync();
 
-                Services.ActivityLogger.LogActivity(KnownActivityLogTypes.AddNewSpecAttribute, T("ActivityLog.AddNewSpecAttribute"), attribute.Name);
-                NotifySuccess(T("Admin.Catalog.Attributes.SpecificationAttributes.Added"));
+                    Services.ActivityLogger.LogActivity(KnownActivityLogTypes.AddNewSpecAttribute, T("ActivityLog.AddNewSpecAttribute"), attribute.Name);
+                    NotifySuccess(T("Admin.Catalog.Attributes.SpecificationAttributes.Added"));
 
-                return continueEditing
-                    ? RedirectToAction(nameof(Edit), new { id = attribute.Id })
-                    : RedirectToAction(nameof(List));
+                    return continueEditing
+                        ? RedirectToAction(nameof(Edit), new { id = attribute.Id })
+                        : RedirectToAction(nameof(List));
+                }
+                catch (Exception ex)
+                {
+                    ModelState.AddModelError(string.Empty, ex.Message);
+                }
             }
 
             return View(model);
@@ -256,7 +274,10 @@ namespace Smartstore.Admin.Controllers
         [Permission(Permissions.Catalog.Attribute.Read)]
         public async Task<IActionResult> Edit(int id)
         {
-            var attribute = await _db.SpecificationAttributes.FindByIdAsync(id, false);
+            var attribute = await _db.SpecificationAttributes
+                .Include(x => x.CollectionGroupMapping)
+                .ThenInclude(x => x.CollectionGroup)
+                .FindByIdAsync(id, false);
             if (attribute == null)
             {
                 return NotFound();
@@ -278,7 +299,10 @@ namespace Smartstore.Admin.Controllers
         [Permission(Permissions.Catalog.Attribute.Update)]
         public async Task<IActionResult> Edit(SpecificationAttributeModel model, bool continueEditing)
         {
-            var attribute = await _db.SpecificationAttributes.FindByIdAsync(model.Id);
+            var attribute = await _db.SpecificationAttributes
+                .Include(x => x.CollectionGroupMapping)
+                .ThenInclude(x => x.CollectionGroup)
+                .FindByIdAsync(model.Id);
             if (attribute == null)
             {
                 return NotFound();
@@ -286,19 +310,27 @@ namespace Smartstore.Admin.Controllers
 
             if (ModelState.IsValid)
             {
-                var mapper = MapperFactory.GetMapper<SpecificationAttributeModel, SpecificationAttribute>();
-                await mapper.MapAsync(model, attribute);
+                try
+                {
+                    var mapper = MapperFactory.GetMapper<SpecificationAttributeModel, SpecificationAttribute>();
+                    await mapper.MapAsync(model, attribute);
 
-                await ApplyLocales(model, attribute);
+                    await _collectionGroupService.ApplyCollectionGroupNameAsync(attribute, model.CollectionGroupName);
+                    await ApplyLocales(model, attribute);
 
-                await _db.SaveChangesAsync();
+                    await _db.SaveChangesAsync();
 
-                Services.ActivityLogger.LogActivity(KnownActivityLogTypes.EditSpecAttribute, T("ActivityLog.EditSpecAttribute"), attribute.Name);
-                NotifySuccess(T("Admin.Catalog.Attributes.SpecificationAttributes.Updated"));
+                    Services.ActivityLogger.LogActivity(KnownActivityLogTypes.EditSpecAttribute, T("ActivityLog.EditSpecAttribute"), attribute.Name);
+                    NotifySuccess(T("Admin.Catalog.Attributes.SpecificationAttributes.Updated"));
 
-                return continueEditing
-                    ? RedirectToAction(nameof(Edit), attribute.Id)
-                    : RedirectToAction(nameof(List));
+                    return continueEditing
+                        ? RedirectToAction(nameof(Edit), attribute.Id)
+                        : RedirectToAction(nameof(List));
+                }
+                catch (Exception ex)
+                {
+                    ModelState.AddModelError(string.Empty, ex.Message);
+                }
             }
 
             return View(model);
@@ -335,7 +367,6 @@ namespace Smartstore.Admin.Controllers
             {
                 query = query.ApplySearchFilterFor(x => x.Name, model.SearchName);
             }
-
             if (model.SearchAlias.HasValue())
             {
                 query = query.ApplySearchFilterFor(x => x.Alias, model.SearchAlias);

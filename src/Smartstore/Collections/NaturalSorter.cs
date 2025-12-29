@@ -1,10 +1,37 @@
-﻿using System.Buffers;
+﻿#nullable enable
+
+using System.Buffers;
 using Smartstore.Collections;
 
 namespace Smartstore
 {
     public static partial class NaturalSortExtensions
     {
+        public static IOrderedEnumerable<TSource> OrderBy<TSource>(this IEnumerable<TSource> source,
+            Func<TSource, string> keySelector,
+            bool sortNaturally,
+            StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+            => sortNaturally ? source.OrderNaturalBy(keySelector, comparison) : source.OrderBy(keySelector);
+
+        public static IOrderedEnumerable<TSource> OrderByDescending<TSource>(this IEnumerable<TSource> source,
+            Func<TSource, string> keySelector,
+            bool sortNaturally,
+            StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+            => sortNaturally ? source.OrderNaturalByDescending(keySelector, comparison) : source.OrderByDescending(keySelector);
+
+        public static IOrderedEnumerable<TSource> ThenBy<TSource>(this IOrderedEnumerable<TSource> source,
+            Func<TSource, string> keySelector,
+            bool sortNaturally,
+            StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+            => sortNaturally ? source.ThenNaturalBy(keySelector, comparison) : source.ThenBy(keySelector);
+
+        public static IOrderedEnumerable<TSource> ThenByDescending<TSource>(this IOrderedEnumerable<TSource> source,
+            Func<TSource, string> keySelector,
+            bool sortNaturally,
+            StringComparison comparison = StringComparison.OrdinalIgnoreCase)
+            => sortNaturally ? source.ThenNaturalByDescending(keySelector, comparison) : source.ThenByDescending(keySelector);
+
+
         /// <summary>
         /// Sorts the strings of a sequence in a natural, human-friendly, ascending order.
         /// </summary>
@@ -47,7 +74,7 @@ namespace Smartstore
         /// Should only be applied to materialized and localized data, otherwise the sorting may become broken.
         /// </remarks>
         public static IOrderedEnumerable<TSource> ThenNaturalBy<TSource>(this IOrderedEnumerable<TSource> source,
-            Func<TSource, string> keySelector,
+            Func<TSource, string>? keySelector,
             StringComparison comparison = StringComparison.OrdinalIgnoreCase)
             => keySelector != null ? source.ThenBy(keySelector, new NaturalSorter(comparison)) : source;
 
@@ -62,7 +89,7 @@ namespace Smartstore
         /// Should only be applied to materialized and localized data, otherwise the sorting may become broken.
         /// </remarks>
         public static IOrderedEnumerable<TSource> ThenNaturalByDescending<TSource>(this IOrderedEnumerable<TSource> source,
-            Func<TSource, string> keySelector,
+            Func<TSource, string>? keySelector,
             StringComparison comparison = StringComparison.OrdinalIgnoreCase)
             => keySelector != null ? source.ThenByDescending(keySelector, new NaturalSorter(comparison)) : source;
     }
@@ -91,7 +118,7 @@ namespace Smartstore.Collections
         /// <summary>
         /// String comparer used for comparing strings.
         /// </summary>
-        private readonly IComparer<string> _stringComparer;
+        private readonly IComparer<string>? _stringComparer;
 
         /// <summary>
         /// Constructs comparer with a <seealso cref="StringComparison" /> as the inner mechanism.
@@ -109,7 +136,7 @@ namespace Smartstore.Collections
         public NaturalSorter(IComparer<string> stringComparer)
             => _stringComparer = stringComparer;
 
-        public int Compare(string str1, string str2)
+        public int Compare(string? str1, string? str2)
         {
             if (str1 == str2) return 0;
             if (str1 == null) return -1;
@@ -154,8 +181,8 @@ namespace Smartstore.Collections
                     if (hasSeparator1 || hasSeparator2)
                     {
                         // Extract only digits; return pooled arrays ONLY if they were rented
-                        ReadOnlySpan<char> digits1 = ExtractDigits(slice1, out char[] buf1, out bool rented1);
-                        ReadOnlySpan<char> digits2 = ExtractDigits(slice2, out char[] buf2, out bool rented2);
+                        ReadOnlySpan<char> digits1 = ExtractDigits(slice1, out var buf1, out bool rented1);
+                        ReadOnlySpan<char> digits2 = ExtractDigits(slice2, out var buf2, out bool rented2);
                         try
                         {
                             int digitCompare = CompareDigitSpans(digits1, digits2);
@@ -295,7 +322,7 @@ namespace Smartstore.Collections
         /// For small sizes, returns a new array (NOT returned to pool).
         /// For large sizes, rents from ArrayPool and sets 'rented' = true so the caller can return it.
         /// </summary>
-        private static ReadOnlySpan<char> ExtractDigits(ReadOnlySpan<char> span, out char[] buffer, out bool rented)
+        private static ReadOnlySpan<char> ExtractDigits(ReadOnlySpan<char> span, out char[]? buffer, out bool rented)
         {
             int digitCount = 0;
             foreach (char c in span)

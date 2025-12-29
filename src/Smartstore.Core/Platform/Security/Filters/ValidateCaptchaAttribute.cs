@@ -1,58 +1,62 @@
-﻿using System.Net.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Newtonsoft.Json;
 using Smartstore.Core.Localization;
+using Smartstore.Engine.Modularity;
 
 namespace Smartstore.Core.Security
 {
-    public class GoogleRecaptchaApiResponse
-    {
-        [JsonProperty("success")]
-        public bool Success { get; set; }
-
-        [JsonProperty("error-codes")]
-        public List<string> ErrorCodes { get; set; }
-    }
-
     /// <summary>
-    /// Checks whether captcha is valid and - if not - outputs a notification.
+    /// Attribute that enables provider-agnostic CAPTCHA validation via the ValidateCaptchaFilter.
+    /// Only carries the logical "target name" to decide whether CAPTCHA is active for the current action.
     /// </summary>
     public sealed class ValidateCaptchaAttribute : TypeFilterAttribute
     {
-        public ValidateCaptchaAttribute()
+        /// <summary>
+        /// Creates a new attribute instance for the given logical target.
+        /// Example targets could be "PasswordRecovery", "ContactUs", etc.
+        /// </summary>
+        /// <param name="targetName">
+        /// Logical target name used by ICaptchaManager to determine whether CAPTCHA is active.
+        /// Pass an empty string to always validate when a provider is configured.
+        /// </param>
+        public ValidateCaptchaAttribute(string targetName)
             : base(typeof(ValidateCaptchaFilter))
         {
-            Arguments = new object[] { this };
+            Arguments = [this];
+            CaptchaTargetName = targetName;
         }
 
         /// <summary>
-        /// Gets or sets the name of the <see cref="CaptchaSettings"/> property that indicates 
-        /// whether the captcha is displayed ("ShowOnContactUsPage" for example).
-        /// Avoids unnecessary validation requests and "invalid-input-response" error if the captcha is not displayed at all.
+        /// Gets or sets the logical CAPTCHA target name that indicates whether CAPTCHA is active
+        /// for the current action. This avoids unnecessary validation when CAPTCHA is disabled
+        /// for the given target. Use empty string to always validate.
+        /// <see cref="CaptchaSettings.Targets.All"/> contains all valid targets.
         /// </summary>
-        public string CaptchaSettingName { get; set; }
+        public string CaptchaTargetName { get; set; }
     }
 
+    /// <summary>
+    /// MVC action filter that validates CAPTCHA in a provider-agnostic way.
+    /// - Only runs when: request has a form, target is active, and a provider is configured.
+    /// - Pushes two values into ActionArguments:
+    ///     "captchaValid" : bool  -> indicates whether validation succeeded
+    ///     "captchaError" : string? -> localized message suitable for UI (null when valid or not configured)
+    /// - Logs warnings/errors based on validation messages returned by the provider.
+    /// </summary>
     internal class ValidateCaptchaFilter : IAsyncActionFilter
     {
         private readonly ValidateCaptchaAttribute _attribute;
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly CaptchaSettings _captchaSettings;
-        private readonly SmartConfiguration _appConfig;
+        private readonly ICaptchaManager _captchaManager;
 
         public ValidateCaptchaFilter(
             ValidateCaptchaAttribute attribute,
-            IHttpClientFactory httpClientFactory,
-            CaptchaSettings captchaSettings,
             ILogger<ValidateCaptchaFilter> logger,
             Localizer localizer,
-            SmartConfiguration appConfig)
+            ICaptchaManager captchaManager)
         {
             _attribute = attribute;
-            _httpClientFactory = httpClientFactory;
-            _captchaSettings = captchaSettings;
-            _appConfig = appConfig;
+            _captchaManager = captchaManager;
+
             Logger = logger;
             T = localizer;
         }
@@ -63,51 +67,45 @@ namespace Smartstore.Core.Security
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
             var valid = false;
+            Provider<ICaptchaProvider> captchaProvider = null;
 
             try
             {
-                if (_captchaSettings.CanDisplayCaptcha && context.HttpContext.Request.HasFormContentType && IsCaptchaDisplayed())
+                if (
+                    context.HttpContext.Request.HasFormContentType
+                    && IsCaptchaActive() 
+                    && _captchaManager.IsConfigured(out captchaProvider))
                 {
-                    var client = _httpClientFactory.CreateClient();
-                    var verifyUrl = _appConfig.Google.RecaptchaVerifyUrl;
-                    var recaptchaResponse = context.HttpContext.Request.Form["g-recaptcha-response"];
+                    var captchaContext = new CaptchaContext(context.HttpContext);
+                    var result = await captchaProvider.Value.ValidateAsync(captchaContext);
 
-                    var url = "{0}?secret={1}&response={2}".FormatInvariant(
-                        verifyUrl,
-                        _captchaSettings.ReCaptchaPrivateKey.UrlEncode(),
-                        recaptchaResponse.ToString().UrlEncode()
-                    );
-
-                    var jsonResponse = await client.GetStringAsync(url);
-                    var result = JsonConvert.DeserializeObject<GoogleRecaptchaApiResponse>(jsonResponse);
-
-                    if (result == null)
+                    if (result.Success)
                     {
-                        Logger.Error(T("Common.CaptchaUnableToVerify"));
+                        valid = true;
                     }
-                    else
+                    else if (result.Messages.Count > 0)
                     {
-                        if (result.ErrorCodes == null)
+                        foreach (var message in result.Messages)
                         {
-                            valid = result.Success;
-                        }
-                        else
-                        {
-                            // Do not log 'missing input'. Could be a regular case.
-                            foreach (var error in result.ErrorCodes.Where(x => x.HasValue() && x != "missing-input-response"))
+                            var text = T("Common.CaptchaCheckFailed", message.Code).Value;
+                            if (message.Level == CaptchaValidationMessageLevel.Warning)
                             {
-                                var msg = T("Common.ReCaptchaCheckFailed", error);
-                                if (error == "invalid-input-response")
-                                {
-                                    Logger.Warn(msg);
-                                }
-                                else
-                                {
-                                    Logger.Error(msg);
-                                }
+                                Logger.Warn(text);
+                            }
+                            else
+                            {
+                                Logger.Error(text);
                             }
                         }
                     }
+                    else
+                    {
+                        Logger.Error(T("Common.CaptchaUnableToVerify").Value);
+                    }
+                }
+                else
+                {
+                    valid = true;
                 }
             }
             catch (Exception ex)
@@ -115,32 +113,25 @@ namespace Smartstore.Core.Security
                 Logger.ErrorsAll(ex);
             }
 
-            // This will push the result value into a parameter in our action method.
+            // Expose validation outcome to the action
             context.ActionArguments["captchaValid"] = valid;
 
-            context.ActionArguments["captchaError"] = !valid && _captchaSettings.CanDisplayCaptcha
-                ? T(_captchaSettings.UseInvisibleReCaptcha ? "Common.WrongInvisibleCaptcha" : "Common.WrongCaptcha").Value
+            // Provide a user-facing error string only when a provider is configured but validation failed
+            var nonInteractive = (captchaProvider?.Value?.IsNonInteractive == true);
+            var captchaError = !valid && captchaProvider?.Value.IsConfigured == true
+                ? T(nonInteractive ? "Common.WrongInvisibleCaptcha" : "Common.WrongCaptcha").Value
                 : null;
+            context.ActionArguments["captchaError"] = captchaError;
+
+            if (!valid && captchaError.HasValue())
+            {
+                context.ModelState.AddModelError(string.Empty, captchaError);
+            }
 
             await next();
         }
 
-        private bool IsCaptchaDisplayed()
-        {
-            if (_attribute.CaptchaSettingName.HasValue())
-            {
-                var pi = _captchaSettings.GetType().GetProperty(_attribute.CaptchaSettingName);
-                if (pi != null)
-                {
-                    var propValue = pi.GetValue(_captchaSettings);
-                    if (propValue is bool displayCaptcha)
-                    {
-                        return displayCaptcha;
-                    }
-                }
-            }
-
-            return true;
-        }
+        private bool IsCaptchaActive()
+            => _attribute.CaptchaTargetName.IsEmpty() || _captchaManager.IsActiveTarget(_attribute.CaptchaTargetName);
     }
 }

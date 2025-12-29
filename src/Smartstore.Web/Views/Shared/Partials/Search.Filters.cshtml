@@ -28,7 +28,7 @@
             <a class="facet-group-header">
                 <span>@T("Categories.OrderBy")</span>
             </a>
-            <div class="facet-body" aria-expanded="true">
+            <div class="facet-body">
                 <div class="facet-body-inner offcanvas-hstack hstack overflow-x-auto gap-1 small">
                     @foreach (var sort in Model.AvailableSortOptions)
                     {
@@ -86,7 +86,10 @@
                     }
                     @if (selectedCount > 0)
                     {
-                        <a href="@Url.FacetRemove(selectedFilters)" class="btn-remove-group-filters">
+                        <a id="facet-group-remove-@key"
+                           href="@Url.FacetRemove(selectedFilters)" 
+                           class="btn-remove-group-filters"
+                           aria-labelledby="facet-group-remove-@key facet-group-header-@key">
                             @T("Search.Facet.RemoveGroupFilters")
                         </a>
                     }
@@ -100,7 +103,6 @@
 
 <script sm-target-zone="scripts" data-origin="Search.Filters">
     $(function () {
-        // TODO: (wcag) (mh) TAB from inside a panel should go to the next collabsible
         $(".facet-group-header").on('expand.ak collapse.ak', (e) => {
             e.stopPropagation();
 

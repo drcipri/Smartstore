@@ -28,7 +28,7 @@ namespace Smartstore.Core.Checkout.GiftCards
                     .Include(x => x.PurchasedWithOrderItem).ThenInclude(x => x.Order)
                     .Include(x => x.GiftCardUsageHistory)
                     .AsSplitQuery()
-                    .ApplyCouponFilter(couponCodes.Select(x => x.Value).ToArray())
+                    .ApplyCouponFilter([.. couponCodes.Select(x => x.Value)])
                     .ApplyStandardFilter()
                     .ToListAsync();
 
@@ -49,16 +49,40 @@ namespace Smartstore.Core.Checkout.GiftCards
             return result;
         }
 
-        public virtual async Task<bool> ValidateGiftCardAsync(GiftCard giftCard, int storeId = 0)
+        public virtual async Task<bool> ValidateGiftCardAsync(GiftCard giftCard, Customer customer, int storeId = 0)
         {
-            Guard.NotNull(giftCard, nameof(giftCard));
+            Guard.NotNull(giftCard);
+            Guard.NotNull(customer);
 
-            return await GetRemainingAmountCoreAsync(giftCard, true, storeId) > decimal.Zero;
+            if (await GetRemainingAmountCoreAsync(giftCard, true, storeId) <= decimal.Zero)
+            {
+                return false;
+            }
+
+            var couponCodesQuery = _db.GenericAttributes
+                .AsNoTracking()
+                .Where(x => x.KeyGroup == nameof(Customer) && x.Key == SystemCustomerAttributeNames.GiftCardCouponCodes && x.EntityId != customer.Id);
+
+            var pager = couponCodesQuery.ToFastPager(1000);
+            while ((await pager.ReadNextPageAsync(x => new { x.Value, x.Id }, x => x.Id)).Out(out var attributes))
+            {
+                var couponCodes = attributes
+                    .SelectMany(x => x.Value?.Convert<List<GiftCardCouponCode>>() ?? Enumerable.Empty<GiftCardCouponCode>())
+                    .Select(x => x.Value);
+
+                if (couponCodes.Any(x => x.EqualsNoCase(giftCard.GiftCardCouponCode)))
+                {
+                    // Coupon code must only be applied once.
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public virtual async Task<Money> GetRemainingAmountAsync(GiftCard giftCard)
         {
-            Guard.NotNull(giftCard, nameof(giftCard));
+            Guard.NotNull(giftCard);
 
             var amount = await GetRemainingAmountCoreAsync(giftCard, false);
 
@@ -72,7 +96,7 @@ namespace Smartstore.Core.Checkout.GiftCards
 
             if (result.Length > length)
             {
-                result = result.Substring(0, length);
+                result = result[..length];
             }
 
             return result;

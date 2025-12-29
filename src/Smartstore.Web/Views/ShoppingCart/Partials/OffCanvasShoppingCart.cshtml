@@ -38,17 +38,21 @@
             </span>
         </div>
 
-        <div class="offcanvas-cart-items">
+        <div class="offcanvas-cart-items" role="list" aria-labelledby="cart-tab">
             @foreach (var item in Model.Items)
             {
                 var bundleItemsWithImages = item.BundleItems
                     .Where(x => x.ImageModel?.HasImage() == true)
                     .ToArray();
 
-                <div class="offcanvas-cart-item" attr-class='(!item.Active, "offcanvas-cart-item-inactive")'>
+                <div class="offcanvas-cart-item" 
+                     attr-class='(!item.Active, "offcanvas-cart-item-inactive")' 
+                     data-sku="@item.ProductSku"
+                     role="listitem" 
+                     aria-labelledby="cart-item-link-@(item.Id)">
                     <div class="row sm-gutters">
                         <div sm-if="Model.ShowProductImages" class="col col-image col-alpha">
-                            <a sm-if="item.Image.HasImage()" class="img-center-container" href="@item.ProductUrl" title="@item.Image.Title">
+                            <a sm-if="item.Image.HasImage()" class="img-center-container" href="@item.ProductUrl" aria-hidden="true" tabindex="-1">
                                 <img sm-model="item.Image" attr-alt='(item.Image.Alt.IsEmpty(), item.ProductName)' />
                             </a>
                         </div>
@@ -71,9 +75,13 @@
                             <div sm-if="bundleItemsWithImages.Length > 0" class="mb-bundle-pictures mt-3">
                                 @for (var i = 0; i < bundleItemsWithImages.Length; ++i)
                                 {
-                                    var bundelItem = bundleItemsWithImages[i];
-                                    <a href="@bundelItem.ProductUrl" title="@bundelItem.ProductName" class="link-dnn">
-                                        <img sm-model="bundelItem.ImageModel" attr-alt='(bundelItem.ImageModel.Alt.IsEmpty(), bundelItem.ProductName)' />
+                                    var bundleItem = bundleItemsWithImages[i];
+                                    <a href="@bundleItem.ProductUrl" 
+                                       class="link-dnn"
+                                       title="@bundleItem.ProductName" 
+                                       aria-label="@T("Aria.Label.BundleContains", bundleItem.ProductName)"
+                                       aria-describedby="sr-desc-empty">
+                                        <img sm-model="bundleItem.ImageModel" alt="" />
                                     </a>
                                     <i sm-if="(i + 1) < bundleItemsWithImages.Length" class="fa fa-plus"></i>
                                 }
@@ -94,14 +102,14 @@
                                     data_type = "cart",
                                     data_sci_id = item.Id,
                                     id = $"o-cart-item-quantity-{item.Id}",
-                                    aria_labelledby = $"cart-item-link-{item.Id}"
+                                    aria_label = $"{T("ShoppingCart.Quantity")} {item.ProductName}"
                                 }
                             })
                         </div>
                         <div class="col">
-                            <span class="price unit-price">
+                            <data asp-for="@item.UnitPrice" class="price unit-price">
                                 @item.UnitPrice
-                            </span>
+                            </data>
 
                             @if (Model.ShowBasePrice && item.BasePriceInfo.HasValue())
                             {
@@ -155,9 +163,9 @@
                     <div class="sub-total-caption">
                         @T("ShoppingCart.Totals.SubTotal"):
                     </div>
-                    <div class="sub-total price">
+                    <data asp-for="@Model.SubTotal" class="sub-total price">
                         @Model.SubTotal
-                    </div>
+                    </data>
                 </div>
             </div>
             <div class="offcanvas-cart-footer-col row gy-1 gx-2 flex-wrap">
@@ -201,7 +209,7 @@
     {
         <div sm-suppress-if-empty-zone="offcanvas_cart_summary" class="offcanvas-cart-external-checkout">
             <div class="heading heading-center py-0">
-                <h6 class="heading-title fs-h5 fwn">@T("Common.Or")</h6>
+                <span class="heading-title fs-h5 fwn">@T("Common.Or")</span>
             </div>
             @*INFO: written like this so pseudo selector :not(:empty) can work and suppress padding, in case we need to return Empty() from ViewComponent directly*@
             <div class="d-flex justify-content-center align-items-center flex-wrap flex-column"><zone name="offcanvas_cart_summary" /></div>

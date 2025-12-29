@@ -3,16 +3,21 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Smartstore.Web.Modelling.Settings
 {
-    [AttributeUsage(AttributeTargets.Method, Inherited = false, AllowMultiple = false)]
+    [AttributeUsage(AttributeTargets.Method, Inherited = true, AllowMultiple = false)]
     public sealed class SaveSettingAttribute : LoadSettingAttribute
     {
         public SaveSettingAttribute()
-            : base(typeof(SaveSettingFilter), true)
+            : base(typeof(SaveSettingFilter), true, true)
         {
         }
 
-        public SaveSettingAttribute(bool bindParameterFromStore)
-            : base(typeof(SaveSettingFilter), bindParameterFromStore)
+        public SaveSettingAttribute(bool hasStoreScope)
+            : base(typeof(SaveSettingFilter), true, hasStoreScope)
+        {
+        }
+
+        public SaveSettingAttribute(bool bindParameterFromStore, bool hasStoreScope)
+            : base(typeof(SaveSettingFilter), bindParameterFromStore, hasStoreScope)
         {
             Arguments = [this];
         }

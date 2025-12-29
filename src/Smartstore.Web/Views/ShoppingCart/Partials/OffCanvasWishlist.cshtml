@@ -4,12 +4,13 @@
 @model WishlistModel
 
 @{
-    int descMaxLength = Model.ShowProductImages ? 120 : 140;
-    int attrMaxLength = Model.ShowProductImages ? 50 : 70;
+    var descMaxLength = Model.ShowProductImages ? 120 : 140;
+    var attrMaxLength = Model.ShowProductImages ? 50 : 70;
+    var hasItems = Model.Items.Any();
 }
 
 <div class="offcanvas-cart-body offcanvas-scrollable">
-    <div sm-if="!Model.Items.Any()" class="no-items" role="status">
+    <div sm-if="!hasItems" class="no-items" role="status">
         <h4 class="no-item-title">
             @T("ShoppingCart.Mini.EmptyWishlist.Title")
         </h4>
@@ -21,7 +22,7 @@
         </p>
     </div>
 
-    @if (Model.Items.Any())
+    @if (hasItems)
     {
         // Items added in the last 2 seconds are considered to be current
         var currentItem = Model.Items.FirstOrDefault(x => x.CreatedOnUtc >= DateTime.UtcNow.AddSeconds(-2));
@@ -33,22 +34,22 @@
             </span>
         </div>
 
-        <div class="offcanvas-cart-items">
+        <div class="offcanvas-cart-items" role="list" aria-labelledby="wishlist-tab">
             @foreach (var item in Model.Items)
             {
                 var bundleItemsWithImages = item.ChildItems.Where(x => x.Image.HasImage()).ToArray();
 
-                <div class="offcanvas-cart-item">
+                <div class="offcanvas-cart-item" data-sku="@item.Sku" role="listitem" aria-labelledby="wishlist-item-link-@(item.Id)">
                     <div class="row sm-gutters">
                         <div sm-if="Model.ShowProductImages" class="col col-alpha">
-                            <a sm-if="item.Image.HasImage()" class="img-center-container" href="@item.ProductUrl" title="@item.Image.Title">
+                            <a sm-if="item.Image.HasImage()" class="img-center-container" href="@item.ProductUrl" aria-hidden="true" tabindex="-1">
                                 <img sm-model="item.Image" attr-alt='(item.Image.Alt.IsEmpty(), item.ProductName)' />
                             </a>
                         </div>
 
                         <div class="col col-data">
-                            <a sm-language-attributes-for="item.ProductName" 
-                               id="wishlist-item-link-@(item.Id)"
+                            <a id="wishlist-item-link-@(item.Id)"
+                               sm-language-attributes-for="item.ProductName" 
                                class="name fwm link-body link-dnu" 
                                href="@item.ProductUrl" 
                                title="@item.ProductName">
@@ -66,9 +67,13 @@
                             <div sm-if="bundleItemsWithImages.Length > 0" class="mb-bundle-pictures mt-3">
                                 @for (var i = 0; i < bundleItemsWithImages.Length; ++i)
                                 {
-                                    var bundelItem = bundleItemsWithImages[i];
-                                    <a href="@bundelItem.ProductUrl" title="@bundelItem.ProductName" class="link-dnn">
-                                        <img sm-model="bundelItem.Image" attr-alt='(bundelItem.Image.Alt.IsEmpty(), bundelItem.ProductName)' />
+                                    var bundleItem = bundleItemsWithImages[i];
+                                    <a href="@bundleItem.ProductUrl" 
+                                       class="link-dnn"
+                                       title="@bundleItem.ProductName" 
+                                       aria-label="@T("Aria.Label.BundleContains", bundleItem.ProductName)"
+                                       aria-describedby="sr-desc-empty">
+                                        <img sm-model="bundleItem.Image" alt="" />
                                     </a>
                                     <i sm-if="(i + 1) < bundleItemsWithImages.Length" class="fa fa-plus" aria-hidden="true"></i>
                                 }
@@ -87,14 +92,14 @@
                                     data_type = "wishlist", 
                                     data_sci_id = item.Id,
                                     id = $"o-wishlist-item-quantity-{item.Id}",
-                                    aria_labelledby = $"wishlist-item-link-{item.Id}"
+                                    aria_label = $"{T("ShoppingCart.Quantity")} {item.ProductName}"
                                 }
                             })
                         </div>
                         <div class="col">
-                            <span class="price unit-price">
+                            <data asp-for="@item.Price.UnitPrice" class="price unit-price">
                                 @item.Price.UnitPrice
-                            </span>
+                            </data>
                         </div>
 
                         <div class="col-auto ml-auto text-nowrap">
@@ -133,7 +138,7 @@
     }    
 </div>
 
-<div sm-if="Model.Items.Any()" class="offcanvas-cart-footer">
+<div sm-if="hasItems" class="offcanvas-cart-footer">
     <div class="offcanvas-cart-footer-row">
         <a class="btn btn-clear btn-block btn-action" asp-route="Wishlist">
             <i class="fa fa-check" aria-hidden="true"></i>

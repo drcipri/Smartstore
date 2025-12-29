@@ -720,7 +720,7 @@ namespace Smartstore.Web.Controllers
                     attributeModel.Values = [.. valuesModels
                         .Select(x => (ChoiceItemModel)x)
                         .OrderBy(x => x.DisplayOrder)
-                        .ThenNaturalBy(x => x.Name)];
+                        .ThenNaturalBy(_catalogSettings.SortAttributesNaturally ? x => x.Name : null)];
                 }
 
                 // Add selected attributes for initially displayed combination images and multiple selected checkbox values.
@@ -1133,6 +1133,28 @@ namespace Smartstore.Web.Controllers
                     _currencyService.ConvertToWorkingCurrency(minCustomerEnteredPrice),
                     _currencyService.ConvertToWorkingCurrency(maxCustomerEnteredPrice));
             }
+
+            // Add-to-Cart button summary for screen readers.
+            if (!toCart.DisableBuyButton 
+                && !toCart.AvailableForPreOrder 
+                && !ctx.IsAssociatedProduct
+                && product.ProductType != ProductType.GroupedProduct
+                && ctx.ProductBundleItem == null)
+            {
+                if (product.ProductType == ProductType.SimpleProduct)
+                {
+                    var attributeInfo = ctx.SelectedAttributes != null
+                        ? await _productAttributeFormatter.FormatAttributesAsync(ctx.SelectedAttributes, product, ProductAttributeFormatOptions.PlainText, ctx.Customer)
+                        : string.Empty;
+
+                    toCart.AddToCartSummary = T("Aria.Label.CartItemSummaryWithAttributes", model.Name, model.Price.FinalPrice.ToString(), selectedQuantity, attributeInfo);
+                }
+                else
+                {
+                    // The cart button is not updated after quantity changes, so quantity cannot be included.
+                    toCart.AddToCartSummary = T("Aria.Label.CartItemSummary", model.Name, model.Price.FinalPrice.ToString());
+                }
+            }
         }
 
         protected void PrepareProductGiftCardsModel(ProductDetailsModel model, ProductDetailsModelContext ctx)
@@ -1244,7 +1266,7 @@ namespace Smartstore.Web.Controllers
             var model = new MediaGalleryModel
             {
                 ModelName = productName,
-                DefaultAlt = T("Media.Product.ImageAlternateTextFormat", productName),
+                DefaultAlt = productName,
                 BoxEnabled = true, // TODO: make a setting for this in the future
                 ImageZoomEnabled = _mediaSettings.DefaultPictureZoomEnabled,
                 ImageZoomType = _mediaSettings.PictureZoomType,
@@ -1344,43 +1366,37 @@ namespace Smartstore.Web.Controllers
             Guard.NotNull(ctx);
 
             var product = ctx.Product;
-            var batchContext = ctx.BatchContext;
             var cacheKey = string.Format(ModelCacheInvalidator.PRODUCT_SPECS_MODEL_KEY, product.Id, _services.WorkContext.WorkingLanguage.Id);
 
             return await _services.CacheFactory.GetMemoryCache().GetAsync(cacheKey, async () =>
             {
-                List<ProductSpecificationAttribute> attrs;
+                // INFO: Use navigation properties because data is only required on product detail page.
+                // See also CatalogHelper.ProductSummary.MapProductSpecificationModels.
+                await _db.LoadCollectionAsync(product, x => x.ProductSpecificationAttributes, false, 
+                    q => q.Include(x => x.SpecificationAttributeOption.SpecificationAttribute.CollectionGroupMapping.CollectionGroup));
 
-                if (_db.IsCollectionLoaded(product, x => x.ProductSpecificationAttributes))
-                {
-                    attrs = product.ProductSpecificationAttributes
-                        .Where(x =>
-                            (x.ShowOnProductPage == null && x.SpecificationAttributeOption?.SpecificationAttribute?.ShowOnProductPage == true) ||
-                            (x.ShowOnProductPage == true))
-                        .ToList();
-                }
-                else
-                {
-                    attrs = (await batchContext.SpecificationAttributes.GetOrLoadAsync(product.Id))
-                        .Where(x =>
-                            (x.ShowOnProductPage == null && x.SpecificationAttributeOption?.SpecificationAttribute?.ShowOnProductPage == true) ||
-                            (x.ShowOnProductPage == true))
-                        .ToList();
-                }
-
-                return attrs
-                    .OrderBy(x => x.DisplayOrder)
-                    .ThenBy(x => x.SpecificationAttributeOption.SpecificationAttribute.DisplayOrder)
-                    .ThenBy(x => x.SpecificationAttributeOption.SpecificationAttribute.Name)
-                    .Select(x => new ProductSpecificationModel
-                    {
-                        SpecificationAttributeId = x.SpecificationAttributeOption.SpecificationAttributeId,
-                        SpecificationAttributeName = x.SpecificationAttributeOption.SpecificationAttribute.GetLocalized(x => x.Name),
-                        SpecificationAttributeOption = x.SpecificationAttributeOption.GetLocalized(x => x.Name),
-                        Essential = x.SpecificationAttributeOption.SpecificationAttribute.Essential,
-                        DisplayOrder = x.SpecificationAttributeOption.DisplayOrder
-                    })
+                var result =
+                    (from x in product.ProductSpecificationAttributes
+                     let option = x.SpecificationAttributeOption
+                     let attr = option.SpecificationAttribute
+                     let collGroup = attr.CollectionGroupMapping?.CollectionGroup
+                     let isGrouped = collGroup?.Published ?? false
+                     where (x.ShowOnProductPage == null && attr.ShowOnProductPage == true) || x.ShowOnProductPage == true
+                     orderby x.DisplayOrder, attr.DisplayOrder, attr.Name
+                     select new ProductSpecificationModel
+                     {
+                         IsGrouped = isGrouped,
+                         CollectionGroupName = isGrouped ? collGroup.GetLocalized(y => y.Name) : null,
+                         CollectionGroupDisplayOrder = isGrouped ? collGroup.DisplayOrder : 0,
+                         SpecificationAttributeId = attr.Id,
+                         SpecificationAttributeName = attr.GetLocalized(y => y.Name),
+                         SpecificationAttributeOption = option.GetLocalized(y => y.Name),
+                         Essential = attr.Essential,
+                         DisplayOrder = option.DisplayOrder
+                     })
                     .ToList();
+
+                return result;
             });
         }
 
@@ -1393,7 +1409,7 @@ namespace Smartstore.Web.Controllers
             model.ProductName = product.GetLocalized(x => x.Name);
             model.ProductSeName = await product.GetActiveSlugAsync();
             model.CanReview = _catalogSettings.AllowAnonymousUsersToReviewProduct || !_services.WorkContext.CurrentCustomer.IsGuest();
-            model.DisplayCaptcha = _captchaSettings.CanDisplayCaptcha && _captchaSettings.ShowOnProductReviewPage;
+            model.DisplayCaptcha = _captchaSettings.IsActiveTarget(CaptchaSettings.Targets.ProductReview);
             model.ShowVerfiedPurchaseBadge = _catalogSettings.ShowVerfiedPurchaseBadge;
 
             await _db.LoadCollectionAsync(product, x => x.ProductReviews, false, q => q

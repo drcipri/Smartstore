@@ -38,7 +38,6 @@ namespace Smartstore.Web.Controllers
         private readonly CatalogSettings _catalogSettings;
         private readonly CatalogHelper _helper;
         private readonly IBreadcrumb _breadcrumb;
-        private readonly CaptchaSettings _captchaSettings;
         private readonly LocalizationSettings _localizationSettings;
         private readonly PrivacySettings _privacySettings;
         private readonly PaymentSettings _paymentSettings;
@@ -64,7 +63,6 @@ namespace Smartstore.Web.Controllers
             CatalogSettings catalogSettings,
             CatalogHelper helper,
             IBreadcrumb breadcrumb,
-            CaptchaSettings captchaSettings,
             LocalizationSettings localizationSettings,
             PrivacySettings privacySettings,
             PaymentSettings paymentSettings,
@@ -89,7 +87,6 @@ namespace Smartstore.Web.Controllers
             _catalogSettings = catalogSettings;
             _helper = helper;
             _breadcrumb = breadcrumb;
-            _captchaSettings = captchaSettings;
             _localizationSettings = localizationSettings;
             _privacySettings = privacySettings;
             _paymentSettings = paymentSettings;
@@ -560,20 +557,15 @@ namespace Smartstore.Web.Controllers
         }
 
         [HttpPost, ActionName("Reviews")]
-        [ValidateCaptcha(CaptchaSettingName = nameof(CaptchaSettings.ShowOnProductReviewPage))]
+        [ValidateCaptcha(CaptchaSettings.Targets.ProductReview)]
         [GdprConsent]
-        public async Task<IActionResult> ReviewsAdd(int id, ProductReviewsModel model, string captchaError)
+        public async Task<IActionResult> ReviewsAdd(int id, ProductReviewsModel model)
         {
             // INFO: Entity is being loaded tracked because else navigation properties can't be loaded in PrepareProductReviewsModelAsync.
             var product = await _db.Products.FindByIdAsync(id);
             if (product == null || product.IsSystemProduct || !product.Published || !product.AllowCustomerReviews)
             {
                 return NotFound();
-            }
-
-            if (_captchaSettings.ShowOnProductReviewPage && captchaError.HasValue())
-            {
-                ModelState.AddModelError(string.Empty, captchaError);
             }
 
             var customer = Services.WorkContext.CurrentCustomer;
@@ -760,9 +752,9 @@ namespace Smartstore.Web.Controllers
         }
 
         [HttpPost, ActionName("AskQuestion")]
-        [ValidateCaptcha(CaptchaSettingName = nameof(CaptchaSettings.ShowOnAskQuestionPage))]
+        [ValidateCaptcha(CaptchaSettings.Targets.ProductInquiry)]
         [ValidateHoneypot, GdprConsent]
-        public async Task<IActionResult> AskQuestionSend(ProductAskQuestionModel model, string captchaError)
+        public async Task<IActionResult> AskQuestionSend(ProductAskQuestionModel model)
         {
             if (!_catalogSettings.AskQuestionEnabled)
             {
@@ -773,11 +765,6 @@ namespace Smartstore.Web.Controllers
             if (product == null || product.IsSystemProduct || !product.Published)
             {
                 return NotFound();
-            }
-
-            if (_captchaSettings.ShowOnAskQuestionPage && captchaError.HasValue())
-            {
-                ModelState.AddModelError(string.Empty, captchaError);
             }
 
             if (ModelState.IsValid)
@@ -831,7 +818,6 @@ namespace Smartstore.Web.Controllers
                 SenderName = customer.GetFullName(),
                 SenderNameRequired = _privacySettings.FullNameOnProductRequestRequired,
                 SenderPhone = customer.GenericAttributes.Phone,
-                DisplayCaptcha = _captchaSettings.CanDisplayCaptcha && _captchaSettings.ShowOnAskQuestionPage,
                 SelectedAttributes = string.Empty,
                 ProductUrl = await _productUrlHelper.Value.GetAbsoluteProductUrlAsync(product.Id, slug, selection),
                 IsQuoteRequest = product.CallForPrice
@@ -869,18 +855,13 @@ namespace Smartstore.Web.Controllers
         }
 
         [HttpPost, ActionName("EmailAFriend")]
-        [ValidateCaptcha(CaptchaSettingName = nameof(CaptchaSettings.ShowOnEmailProductToFriendPage))]
+        [ValidateCaptcha(CaptchaSettings.Targets.ShareProduct)]
         [GdprConsent]
-        public async Task<IActionResult> EmailAFriendSend(ProductEmailAFriendModel model, int id, string captchaError)
+        public async Task<IActionResult> EmailAFriendSend(ProductEmailAFriendModel model, int id)
         {
             var product = await _db.Products.FindByIdAsync(id, false);
             if (product == null || product.IsSystemProduct || !product.Published || !_catalogSettings.EmailAFriendEnabled)
                 return NotFound();
-
-            if (_captchaSettings.ShowOnEmailProductToFriendPage && captchaError.HasValue())
-            {
-                ModelState.AddModelError(string.Empty, captchaError);
-            }
 
             var customer = Services.WorkContext.CurrentCustomer;
 
@@ -919,8 +900,7 @@ namespace Smartstore.Web.Controllers
                 ProductName = product.GetLocalized(x => x.Name),
                 ProductSeName = await product.GetActiveSlugAsync(),
                 YourEmailAddress = Services.WorkContext.CurrentCustomer.Email,
-                AllowChangedCustomerEmail = _catalogSettings.AllowDifferingEmailAddressForEmailAFriend,
-                DisplayCaptcha = _captchaSettings.CanDisplayCaptcha && _captchaSettings.ShowOnEmailProductToFriendPage
+                AllowChangedCustomerEmail = _catalogSettings.AllowDifferingEmailAddressForEmailAFriend
             };
 
             return model;

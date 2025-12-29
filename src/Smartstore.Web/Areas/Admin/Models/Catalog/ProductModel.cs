@@ -312,7 +312,7 @@ namespace Smartstore.Admin.Models.Catalog
             public int? SpecificationAttributeId { get; set; }
 
             [LocalizedDisplay("*SpecificationAttributeOption")]
-            public int? SpecificationAttributeOptionId { get; set; }
+            public string SpecificationAttributeOption { get; set; }
 
             [LocalizedDisplay("*AllowFiltering")]
             public bool? AllowFiltering { get; set; }
@@ -709,8 +709,10 @@ namespace Smartstore.Admin.Models.Catalog
 
     public partial class ProductVariantAttributeValueModelValidator : SmartValidator<ProductModel.ProductVariantAttributeValueModel>
     {
-        public ProductVariantAttributeValueModelValidator()
+        public ProductVariantAttributeValueModelValidator(SmartDbContext db)
         {
+            ApplyEntityRules<ProductVariantAttributeValue>(db);
+
             RuleFor(x => x.Name).NotEmpty();
             RuleFor(x => x.Quantity).GreaterThanOrEqualTo(1).When(x => x.ValueTypeId == (int)ProductVariantAttributeValueType.ProductLinkage);
         }

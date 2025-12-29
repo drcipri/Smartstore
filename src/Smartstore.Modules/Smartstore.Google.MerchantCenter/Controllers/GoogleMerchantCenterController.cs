@@ -36,18 +36,34 @@ namespace Smartstore.Google.MerchantCenter.Controllers
         {
             var culture = CultureInfo.InvariantCulture;
             var model = new GoogleProductModel { ProductId = productId };
-            var entity = await _db.GoogleProducts().FirstOrDefaultAsync(x => x.ProductId == productId);
+            var googleProduct = await _db.GoogleProducts().FirstOrDefaultAsync(x => x.ProductId == productId);
             string notSpecified = T("Common.Unspecified");
 
-            if (entity != null)
+            if (googleProduct != null)
             {
-                await MapperFactory.MapAsync(entity, model);
+                await MapperFactory.MapAsync(googleProduct, model);
                 model.ProductId = productId;
+                model.AssignedFileIds = googleProduct.MediaFileIds.ToIntArray();
             }
             else
             {
                 model.Export = true;
             }
+
+            var files = await _db.ProductMediaFiles
+                .AsNoTracking()
+                .Include(x => x.MediaFile)
+                .ApplyProductFilter(productId)
+                .Select(x => x.MediaFile)
+                .ToListAsync();
+
+            model.AssignableFiles = [.. files
+                .Select(x => new GoogleProductModel.AssignableFileModel
+                {
+                    Id = x.Id,
+                    IsAssigned = model.AssignedFileIds?.Contains(x.Id) ?? false,
+                    Media = Services.MediaService.ConvertMediaFile(x)
+                })];
 
             ViewBag.DefaultCategory = string.Empty;
             ViewBag.DefaultColor = string.Empty;
@@ -64,10 +80,9 @@ namespace Smartstore.Google.MerchantCenter.Controllers
 
             // We do not have export profile context here, so we simply use the first profile.
             var profile = await _db.ExportProfiles.FirstOrDefaultAsync(x => x.ProviderSystemName == GmcXmlExportProvider.SystemName);
-
             if (profile != null)
             {
-                if (XmlHelper.Deserialize(profile.ProviderConfigData, typeof(ProfileConfigurationModel)) is ProfileConfigurationModel config)
+                if (XmlHelper.Deserialize<ProfileConfigurationModel>(profile.ProviderConfigData) is ProfileConfigurationModel config)
                 {
                     ViewBag.DefaultCategory = config.DefaultGoogleCategory;
                     ViewBag.DefaultColor = config.Color;
@@ -108,18 +123,19 @@ namespace Smartstore.Google.MerchantCenter.Controllers
             var yes = T("Admin.Common.Yes").Value;
             var no = T("Admin.Common.No").Value;
 
-            var query = from p in _db.Products
-                        join gp in _db.GoogleProducts() on p.Id equals gp.ProductId into Products
-                        from gp in Products.DefaultIfEmpty()
-                        where !p.IsSystemProduct
-                        select new
-                        {
-                            GoogleProduct = gp,
-                            ProductId = p.Id,
-                            p.Name,
-                            p.Sku,
-                            p.ProductTypeId
-                        };
+            var query = 
+                from p in _db.Products
+                join gp in _db.GoogleProducts().AsNoTracking() on p.Id equals gp.ProductId into Products
+                from gp in Products.DefaultIfEmpty()
+                where !p.IsSystemProduct
+                select new
+                {
+                    GoogleProduct = gp,
+                    ProductId = p.Id,
+                    p.Name,
+                    p.Sku,
+                    p.ProductTypeId
+                };
 
             if (model.SearchProductName.HasValue())
             {
@@ -195,7 +211,8 @@ namespace Smartstore.Google.MerchantCenter.Controllers
         [HttpPost]
         public async Task<IActionResult> GoogleProductUpsert(GoogleProductModel model)
         {
-            var googleProduct = await _db.GoogleProducts()
+            var googleProducts = _db.GoogleProducts();
+            var googleProduct = await googleProducts
                 .FirstOrDefaultAsync(x => x.ProductId == model.ProductId);
 
             var success = false;
@@ -211,15 +228,15 @@ namespace Smartstore.Google.MerchantCenter.Controllers
             await MapperFactory.MapAsync(model, googleProduct);
 
             googleProduct.UpdatedOnUtc = utcNow;
-            googleProduct.IsTouched = googleProduct.IsTouched();
+            googleProduct.IsTouched = !googleProduct.IsDefault();
 
             if (insert)
             {
-                _db.GoogleProducts().Add(googleProduct);
+                googleProducts.Add(googleProduct);
             }
             else if (!googleProduct.IsTouched)
             {
-                _db.GoogleProducts().Remove(googleProduct);
+                googleProducts.Remove(googleProduct);
             }
 
             await _db.SaveChangesAsync();

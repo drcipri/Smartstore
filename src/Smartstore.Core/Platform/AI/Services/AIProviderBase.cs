@@ -1,6 +1,9 @@
-﻿using Smartstore.Core.AI.Prompting;
+﻿using Smartstore.Core.AI.Metadata;
+using Smartstore.Core.AI.Prompting;
 using Smartstore.Core.Content.Media;
 using Smartstore.Core.Localization;
+using Smartstore.IO;
+using Smartstore.Threading;
 using Smartstore.Utilities;
 
 namespace Smartstore.Core.AI
@@ -26,37 +29,133 @@ namespace Smartstore.Core.AI
         /// </summary>
         protected const string ContinueReason = "length";
 
+        private readonly IAIMetadataLoader _metadataLoader;
+        private readonly string _moduleSystemName;
+        private AIMetadata _metadata;
+
+        public AIProviderBase(IAIMetadataLoader metadataLoader, string moduleSystemName)
+        {
+            _metadataLoader = metadataLoader;
+            _moduleSystemName = moduleSystemName;
+        }
+
         public Localizer T { get; set; } = NullLocalizer.Instance;
 
         public abstract bool IsActive();
 
-        public abstract bool Supports(AIProviderFeatures feature);
+        public AIMetadata Metadata 
+        {
+            get
+            {
+                if (_metadata == null)
+                {
+                    _metadata = _metadataLoader.LoadMetadata(_moduleSystemName);
 
-        public bool SupportsTextCreation
-            => Supports(AIProviderFeatures.TextCreation);
+                    // Ensure that metadata is post-processed only once.
+                    if (!_metadata.PostProcessed)
+                    {
+                        // Post-process metadata asynchronously (fire-and-forget).
+                        var lockHandle = AsyncLock.Keyed("aimetadatalock:" + _metadata.ProviderId);
+                        // Reload from cache
+                        var metadata = _metadataLoader.LoadMetadata(_moduleSystemName);
+                        if (!metadata.PostProcessed)
+                        {
+                            PostProcessMetadataInBackground(metadata, lockHandle);
+                        }
+                        else
+                        {
+                            lockHandle.Release();
+                        }
+                    }
+                }
 
-        public bool SupportsTextTranslation
-            => Supports(AIProviderFeatures.TextTranslation);
+                return _metadata;
+            }
+            protected set => _metadata = value;
+        }
 
-        public bool SupportsImageCreation
-            => Supports(AIProviderFeatures.ImageCreation);
+        private void PostProcessMetadataInBackground(AIMetadata metadata, ILockHandle lockHandle)
+        {
+            var task = _metadataLoader.PostProcessAsync(metadata);
 
-        public bool SupportsImageAnalysis
-            => Supports(AIProviderFeatures.ImageAnalysis);
+            if (task.IsCompleted)
+            {
+                // If already completed, update metadata immediately.
+                if (task.Status == TaskStatus.RanToCompletion && task.Result != null)
+                {
+                    _metadata = task.Result;
+                }
 
-        public bool SuportsThemeVarCreation
-            => Supports(AIProviderFeatures.ThemeVarCreation);
+                _metadata.PostProcessed = true;
+                lockHandle.Release();
+            }
+            else
+            {
+                // Update cached metadata when post-processing is done.
+                task.ContinueWith(t =>
+                {
+                    if (t.Result != null)
+                    {
+                        t.Result.PostProcessed = true;
+                        _metadataLoader.ReplaceMetadata(_moduleSystemName, t.Result);
+                    }
+                    else
+                    {
+                        _metadata.PostProcessed = true;
+                    }
 
-        public bool SupportsAssistence
-            => Supports(AIProviderFeatures.Assistence);
+                    lockHandle.Release();
+                });
+            }
+        }
 
-        public virtual string[] GetPreferredModelNames(AIChatTopic topic)
-            => null;
+        public virtual AIModelCollection GetModels(AIChatTopic topic)
+        {
+            var outputType = topic == AIChatTopic.Image ? AIOutputType.Image : AIOutputType.Text;
+            return Metadata?.MergeModels(outputType, GetPreferredModelNames(outputType));
+        }
 
-        public virtual string[] GetDefaultModelNames()
-            => ["default"];
+        public virtual Task<AIModelCollection> GetLiveModelsAsync(CancellationToken cancelToken = default)
+            => throw new NotSupportedException();
+
+        protected virtual string[] GetPreferredModelNames(AIOutputType outputType)
+            => [];
 
         public virtual Task<string> ChatAsync(AIChat chat, CancellationToken cancelToken = default)
+        {
+            if (chat == null || !chat.HasMessages())
+            {
+                return Task.FromResult<string>(null);
+            }
+
+            if (chat.Topic == AIChatTopic.Image)
+            {
+                if (!chat.Metadata.TryGetAndConvertValue<AIImageChatContext>(KnownAIChatMetadataKeys.ImageChatContext, out var ctx) || ctx == null)
+                {
+                    throw new AIException($"Please provide an image chat context through chat metadata \"{KnownAIChatMetadataKeys.ImageChatContext}\" for a chat of AIChatTopic.Image.");
+                }
+
+                return ImageChatAsync(chat, ctx, cancelToken);
+            }
+            else
+            {
+                return TextChatAsync(chat, cancelToken);
+            }
+        }
+
+        /// <summary>
+        /// Starts or continues a text-to-text AI conversation. Adds the latest answer to the chat.
+        /// </summary>
+        /// <returns>AI text answer.</returns>
+        protected virtual Task<string> TextChatAsync(AIChat chat, CancellationToken cancelToken = default)
+            => throw new NotImplementedException();
+
+        /// <summary>
+        /// Starts or continues a text-to-image AI conversation, including source image(s), to create an image.
+        /// </summary>
+        /// <param name="context">Context data for image generation.</param>
+        /// <returns>Path of a temporary image file.</returns>
+        protected virtual Task<string> ImageChatAsync(AIChat chat, AIImageChatContext context, CancellationToken cancelToken = default)
             => throw new NotImplementedException();
 
         public virtual IAsyncEnumerable<AIChatCompletionResponse> ChatAsStreamAsync(
@@ -75,6 +174,15 @@ namespace Smartstore.Core.AI
             => throw new NotSupportedException();
 
         #region Utilities
+
+        protected static float? ClampTemperature(float temperature)
+        {
+            if (temperature == 1) return null;
+            if (temperature < 0) return 0;
+            if (temperature > 2) return 2;
+
+            return (float?)Math.Round(temperature, 1);
+        }
 
         protected virtual async Task<string> ProcessChatAsync(
             AIChat chat,
@@ -229,14 +337,38 @@ namespace Smartstore.Core.AI
             chat.AddMessages(answers);
         }
 
-        protected static string ValidateModelName(string modelName, string[] supportedModelNames)
+        /// <summary>
+        /// Creates a temporary image file from <paramref name="imageData"/> in <paramref name="tempDirectory"/>.
+        /// </summary>
+        /// <param name="imageData">AI image data.</param>
+        /// <param name="tempDirectory">Directory where to create the temp file.</param>
+        /// <param name="mimeType">Mime type of the AI image. "png" if <c>null</c>.</param>
+        /// <returns>Temp file or <c>null</c> if the file cannot be created.</returns>
+        protected virtual async Task<IFile> CreateTempImageFileAsync(
+            BinaryData imageData,
+            IDirectory tempDirectory,
+            string mimeType = null,
+            CancellationToken cancelToken = default)
         {
-            if (modelName.IsEmpty() || !supportedModelNames.Any(x => x.EqualsNoCase(modelName)))
+            Guard.NotNull(tempDirectory);
+
+            if (imageData == null || imageData.IsEmpty)
             {
-                return supportedModelNames[0];
+                return null;
             }
 
-            return modelName;
+            var extension = MimeTypes.MapMimeTypeToExtension(mimeType).OrDefault("png");
+            var fileName = Path.GetRandomFileName() + '.' + extension;
+            var path = PathUtility.Join(tempDirectory.SubPath, fileName);
+
+            using var imageStream = imageData.ToStream();
+            var file = await tempDirectory.FileSystem.CreateFileAsync(path, imageStream, true, cancelToken);
+            if (file?.Exists == true)
+            {
+                return file;
+            }
+
+            return null;
         }
 
         #endregion

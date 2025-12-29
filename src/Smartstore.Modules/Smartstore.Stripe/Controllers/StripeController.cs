@@ -415,16 +415,28 @@ namespace Smartstore.StripeElements.Controllers
 
                     if (order != null)
                     {
+                        var settings = await Services.SettingFactory.LoadSettingsAsync<StripeSettings>(order.StoreId);
+
                         // INFO: This can also be a partial capture.
                         decimal convertedAmount = paymentIntent.Amount / 100M;
 
-                        var settings = await Services.SettingFactory.LoadSettingsAsync<StripeSettings>(order.StoreId);
-                        var completedPaymentStatus = settings.CaptureMethod == "automatic" ? PaymentStatus.Paid : PaymentStatus.Authorized;
-
                         // Check if full order amount was captured.
-                        order.PaymentStatus = order.OrderTotal == convertedAmount ? completedPaymentStatus : PaymentStatus.Pending;
-
-                        await _db.SaveChangesAsync();
+                        if (order.OrderTotal == convertedAmount)
+                        {
+                            if (settings.CaptureMethod == "automatic" && order.CanMarkOrderAsPaid())
+                            {
+                                await _orderProcessingService.MarkOrderAsPaidAsync(order);
+                            }
+                            else if (order.CanMarkOrderAsAuthorized())
+                            {
+                                await _orderProcessingService.MarkAsAuthorizedAsync(order);
+                            }
+                        }
+                        else
+                        {
+                            order.PaymentStatus = PaymentStatus.Pending;
+                            await _db.SaveChangesAsync();
+                        }
                     }
                 }
                 else if (stripeEvent.Type == EventTypes.ChargeRefunded)
@@ -434,19 +446,19 @@ namespace Smartstore.StripeElements.Controllers
 
                     if (order != null)
                     {
-                        // INFO: This can also be a partial refund.
                         decimal convertedAmount = charge.Amount / 100M;
 
-                        // Check if full order amount was refund.
-                        order.PaymentStatus = order.OrderTotal == convertedAmount ? PaymentStatus.Refunded : PaymentStatus.PartiallyRefunded;
-
-                        // Handle refunded amount.
-                        order.RefundedAmount = convertedAmount;
-
-                        // Write some infos into order notes.
-                        WriteOrderNotes(order, charge);
-                        
-                        await _db.SaveChangesAsync();
+                        if (order.OrderTotal == convertedAmount)
+                        {
+                            if (order.CanRefundOffline())
+                            {
+                                await _orderProcessingService.RefundOfflineAsync(order);
+                            }
+                        }
+                        else if (order.CanPartiallyRefundOffline(convertedAmount))
+                        {
+                            await _orderProcessingService.PartiallyRefundOfflineAsync(order, convertedAmount);
+                        }
                     }
                 }
                 else if (stripeEvent.Type == EventTypes.PaymentIntentCanceled || 
@@ -455,14 +467,9 @@ namespace Smartstore.StripeElements.Controllers
                     var paymentIntent = stripeEvent.Data.Object as PaymentIntent;
                     var order = await GetStripeOrderAsync(paymentIntent.Id);
 
-                    if (order != null)
+                    if (order != null && order.CanVoidOffline())
                     {
-                        order.PaymentStatus = PaymentStatus.Voided;
-
-                        // Write some infos into order notes.
-                        WriteOrderNotes(order, paymentIntent.LatestCharge);
-
-                        await _db.SaveChangesAsync();
+                        await _orderProcessingService.VoidOfflineAsync(order);
                     }
                 }
                 else
@@ -500,11 +507,11 @@ namespace Smartstore.StripeElements.Controllers
         }
 
         // INFO: We leave this method in case we want to log further infos in future.
-        private static void WriteOrderNotes(Order order, Charge charge)
+        private void WriteOrderNotes(Order order, Charge charge)
         {
             if (charge != null)
             {
-                order.AddOrderNote($"Reason for Charge-ID {charge.Id}: {charge.Refunds.FirstOrDefault().Reason} - {charge.Description}", true);
+                _db.OrderNotes.Add(order, $"Reason for Charge-ID {charge.Id}: {charge.Refunds?.FirstOrDefault()?.Reason} - {charge.Description}", true);
             }
         }
     }

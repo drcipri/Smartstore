@@ -99,7 +99,7 @@ namespace Smartstore.Core.DataExchange.Export
         /// <summary>
         /// List with extra data units/streams required by provider.
         /// </summary>
-        public List<ExportDataUnit> ExtraDataUnits { get; private set; } = new();
+        public List<ExportDataUnit> ExtraDataUnits { get; private set; } = [];
 
         /// <summary>
         /// The maximum allowed file name length.
@@ -122,12 +122,12 @@ namespace Smartstore.Core.DataExchange.Export
         public IDirectory ExportDirectory { get; internal set; }
 
         /// <summary>
-        /// A value indicating whether the profile has a public deployment into "Exchange" folder.
+        /// A value indicating whether the profile has a public deployment into "exchange" folder.
         /// </summary>
         public bool HasPublicDeployment { get; internal set; }
 
         /// <summary>
-        /// The public export directory. In general, this is a subfolder of <see cref="DataExporter.PublicDirectoryName"/>.
+        /// The public export directory. In general, this is a subfolder of the "exchange" folder.
         /// <c>null</c> if the profile has no public deployment.
         /// </summary>
         public IDirectory PublicDirectory { get; internal set; }
@@ -145,7 +145,7 @@ namespace Smartstore.Core.DataExchange.Export
         /// <summary>
         /// Use this dictionary for any custom data required along the export.
         /// </summary>
-        public Dictionary<string, object> CustomProperties { get; set; } = new();
+        public Dictionary<string, object> CustomProperties { get; set; } = [];
 
         /// <summary>
         /// Number of successful processed records.
@@ -200,13 +200,7 @@ namespace Smartstore.Core.DataExchange.Export
         {
             if (ProgressCallback != null && message.HasValue())
             {
-                try
-                {
-                    await ProgressCallback.Invoke(0, 0, message);
-                }
-                catch
-                {
-                }
+                await CommonHelper.TryAction(() => ProgressCallback.Invoke(0, 0, message));
             }
         }
     }

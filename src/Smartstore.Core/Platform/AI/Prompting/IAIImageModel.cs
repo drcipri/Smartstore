@@ -1,4 +1,6 @@
-﻿namespace Smartstore.Core.AI.Prompting
+﻿using Smartstore.Imaging;
+
+namespace Smartstore.Core.AI.Prompting
 {
     /// <summary>
     /// Represents a model for AI image generation.
@@ -20,12 +22,19 @@
         string ModelName { get; }
 
         /// <summary>
-        /// e.g. photo, painting, illustration
+        /// Specifies an image style.
+        /// </summary>
+        string Style { get; }
+
+        #region Prompt engineering
+
+        /// <summary>
+        /// E.g. photo, painting, illustration
         /// </summary>
         string Medium { get; }
 
         /// <summary>
-        /// e.g. shop, indoors, outdoors, living room, kitchen, city, forest, beach, pedestal, etc
+        /// E.g. shop, indoors, outdoors, living room, kitchen, city, forest, beach, pedestal, etc
         /// </summary>
         string Environment { get; }
 
@@ -50,14 +59,41 @@
         /// </summary>
         string Composition { get; }
 
-        /// <summary>
-        /// Specifies the image creation format.
-        /// </summary>
-        AIImageFormat Format { get; }
+        #endregion
+
+        #region Image editing
 
         /// <summary>
-        /// Specifies an image style.
+        /// Gets the IDs of the source files used for image editing.
         /// </summary>
-        string Style { get; }
+        int[] SourceFileIds { get; }
+
+        #endregion
+
+        #region Image response/output
+
+        /// <summary>
+        /// Specifies the image orientation.
+        /// </summary>
+        ImageOrientation Orientation { get; }
+
+        /// <summary>
+        /// Gets the aspect ratio of the image, if specified.
+        /// </summary>
+        ImageAspectRatio? AspectRatio { get; }
+
+        /// <summary>
+        /// Gets the resolution setting used for generating the AI image, if specified.
+        /// </summary>
+        AIImageResolution? Resolution { get; }
+
+        /// <summary>
+        /// Gets the format to use for image output.
+        /// </summary>
+        /// <remarks>If not set, the default output format will be used. The selected format may affect
+        /// image quality, file size, and compatibility with downstream consumers.</remarks>
+        AIImageOutputFormat? OutputFormat { get; }
+
+        #endregion
     }
 }

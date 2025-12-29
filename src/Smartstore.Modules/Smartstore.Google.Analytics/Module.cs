@@ -57,7 +57,7 @@ namespace Smartstore.Google.Analytics
 
             if (_settings.DisplayCookieInfosForAds)
             {
-                cookieInfos.AddRange(new CookieInfo[] {
+                cookieInfos.AddRange([
                     new()
                     {
                         Name = T("Plugins.FriendlyName.SmartStore.Google.Analytics"),
@@ -70,7 +70,7 @@ namespace Smartstore.Google.Analytics
                         Description = T("Plugins.Widgets.GoogleAnalytics.ConsentAdPersonalization"),
                         CookieType = CookieType.ConsentAdPersonalization
                     }
-                });
+                ]);
             }
 
             return Task.FromResult<IEnumerable<CookieInfo>>(cookieInfos);
@@ -79,8 +79,7 @@ namespace Smartstore.Google.Analytics
         public Widget GetDisplayWidget(string widgetZone, object model, int storeId)
             => new ComponentWidget(typeof(GoogleAnalyticsViewComponent), model);
 
-        public string[] GetWidgetZones()
-            => new[] { "head" };
+        public string[] GetWidgetZones() => ["head"];
 
         public override async Task InstallAsync(ModuleInstallationContext context)
         {

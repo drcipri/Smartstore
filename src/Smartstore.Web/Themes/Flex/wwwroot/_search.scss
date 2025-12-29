@@ -34,16 +34,23 @@ $facet-selection-glyph-color:   darken($success, 10%);
     transition-duration: 0.2s;
     transition-timing-function: cubic-bezier(.4, 0, .2, 1);
 
-    @if ($searchbox-shadow == true) {
-        &:hover, &:focus, &:active {
-            box-shadow: $box-shadow-sm;
-        }
-    }
-
-    &:focus, &:active {
+    &:is(.active) {
         background-color: $searchbox-bg-2;
         border-color: $searchbox-border-2;
         color: $searchbox-color-2;
+    }
+
+    @if ($searchbox-shadow == true) {
+        &:is(#{unquote(":hover, .active")}) {
+            box-shadow: $box-shadow-sm;
+        }
+    }
+    @else {
+        &:is(.active) {
+            outline: $searchbox-outline-width solid $searchbox-outline-color;
+            outline-offset: -1px;
+            border-color: $searchbox-outline-color;
+        }
     }
 
     &::placeholder {
@@ -126,6 +133,12 @@ $facet-selection-glyph-color:   darken($success, 10%);
         border-bottom-left-radius: 0;
         border-bottom-right-radius: 0;
         background-color: $searchbox-bg-2 !important;
+
+        @if ($searchbox-shadow == false) {
+            box-shadow: $box-shadow-sm;
+            outline-width: 0;
+            border-color: $searchbox-border-2;
+        }
     }
 }
 
@@ -212,10 +225,7 @@ $facet-selection-glyph-color:   darken($success, 10%);
     text-decoration: none;
     border-radius: var(--border-radius-md);
 
-    &:focus, 
-    &:hover, 
-    &.active, 
-    &.key-hover {
+    &:is(#{unquote(":focus, :hover, .active, .key-hover")}) {
         color: $dropdown-link-hover-color;
         text-decoration: none;
         background-color: $dropdown-link-hover-bg;
@@ -415,8 +425,7 @@ $facet-selection-glyph-color:   darken($success, 10%);
         padding-bottom: 0;
     }
 
-    input[type=checkbox],
-    input[type=radio] {
+    input:is(#{unquote("[type=checkbox], [type=radio]")}) {
         position: absolute;
         clip: rect(0, 0, 0, 0);
     }

@@ -190,47 +190,22 @@ namespace Smartstore.Admin.Models
             [LocalizedDisplay("*CaptchaEnabled")]
             public bool Enabled { get; set; }
 
-            [LocalizedDisplay("*CaptchaShowOnLoginPage")]
-            public bool ShowOnLoginPage { get; set; }
+            [LocalizedDisplay("*ProviderSystemName")]
+            public string ProviderSystemName { get; set; }
 
-            [LocalizedDisplay("*CaptchaShowOnRegistrationPage")]
-            public bool ShowOnRegistrationPage { get; set; }
+            [LocalizedDisplay("*CaptchaShowOnTargets")]
+            public string[] ShowOn { get; set; } = [];
 
-            [LocalizedDisplay("*ShowOnPasswordRecoveryPage")]
-            public bool ShowOnPasswordRecoveryPage { get; set; }
+            public List<CaptchaProviderModel> AvailableProviders { get; set; } = new();
+        }
 
-            [LocalizedDisplay("*CaptchaShowOnContactUsPage")]
-            public bool ShowOnContactUsPage { get; set; }
-
-            [LocalizedDisplay("*CaptchaShowOnEmailWishlistToFriendPage")]
-            public bool ShowOnEmailWishlistToFriendPage { get; set; }
-
-            [LocalizedDisplay("*CaptchaShowOnEmailProductToFriendPage")]
-            public bool ShowOnEmailProductToFriendPage { get; set; }
-
-            [LocalizedDisplay("*CaptchaShowOnAskQuestionPage")]
-            public bool ShowOnAskQuestionPage { get; set; }
-
-            [LocalizedDisplay("*CaptchaShowOnBlogCommentPage")]
-            public bool ShowOnBlogCommentPage { get; set; }
-
-            [LocalizedDisplay("*CaptchaShowOnNewsCommentPage")]
-            public bool ShowOnNewsCommentPage { get; set; }
-
-            [LocalizedDisplay("*CaptchaShowOnForumPage")]
-            public bool ShowOnForumPage { get; set; }
-
-            [LocalizedDisplay("*CaptchaShowOnProductReviewPage")]
-            public bool ShowOnProductReviewPage { get; set; }
-
-            [LocalizedDisplay("*reCaptchaPublicKey")]
-            public string ReCaptchaPublicKey { get; set; }
-
-            [LocalizedDisplay("*reCaptchaPrivateKey")]
-            public string ReCaptchaPrivateKey { get; set; }
-
-            [LocalizedDisplay("*UseInvisibleReCaptcha")]
-            public bool UseInvisibleReCaptcha { get; set; }
+        public class CaptchaProviderModel
+        {
+            public string SystemName { get; set; }
+            public string FriendlyName { get; set; }
+            public bool IsConfigured { get; set; }
+            public string ConfigureUrl { get; set; }
+            public string IconUrl { get; set; }
         }
 
         [LocalizedDisplay("Admin.Configuration.Settings.GeneralCommon.")]
@@ -457,17 +432,11 @@ namespace Smartstore.Admin.Models
 
     public partial class CaptchaSettingsValidator : SettingModelValidator<GeneralCommonSettingsModel.CaptchaSettingsModel, CaptchaSettings>
     {
-        public CaptchaSettingsValidator(Localizer T)
+        public CaptchaSettingsValidator()
         {
-            RuleFor(x => x.ReCaptchaPublicKey)
+            RuleFor(x => x.ProviderSystemName)
                 .NotEmpty()
-                .When(x => x.Enabled)
-                .WithMessage(T("Admin.Configuration.Settings.GeneralCommon.CaptchaEnabledNoKeys"));
-
-            RuleFor(x => x.ReCaptchaPrivateKey)
-                .NotEmpty()
-                .When(x => x.Enabled)
-                .WithMessage(T("Admin.Configuration.Settings.GeneralCommon.CaptchaEnabledNoKeys"));
+                .When(x => x.Enabled);
         }
     }
 }

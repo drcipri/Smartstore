@@ -1,13 +1,17 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
+using Smartstore.Core.Catalog;
 using Smartstore.Core.Catalog.Products;
+using Smartstore.Core.Checkout.Cart;
 using Smartstore.Core.Checkout.Orders;
 using Smartstore.Core.Checkout.Tax;
 using Smartstore.Core.Common.Services;
+using Smartstore.Core.Content.Media;
 using Smartstore.Core.Localization;
 using Smartstore.Core.Messaging;
 using Smartstore.Core.Seo;
 using Smartstore.Core.Seo.Routing;
 using Smartstore.Utilities.Html;
+using Smartstore.Web.Models.Customers;
 using Smartstore.Web.Models.Orders;
 
 namespace Smartstore.Web.Controllers
@@ -18,34 +22,42 @@ namespace Smartstore.Web.Controllers
         private readonly IOrderProcessingService _orderProcessingService;
         private readonly ICurrencyService _currencyService;
         private readonly ProductUrlHelper _productUrlHelper;
+        private readonly OrderHelper _orderHelper;
         private readonly IMessageFactory _messageFactory;
         private readonly OrderSettings _orderSettings;
         private readonly LocalizationSettings _localizationSettings;
+        private readonly ShoppingCartSettings _shoppingCartSettings;
+        private readonly MediaSettings _mediaSettings;
 
         public ReturnRequestController(
             SmartDbContext db,
             IOrderProcessingService orderProcessingService,
             ICurrencyService currencyService,
             ProductUrlHelper productUrlHelper,
+            OrderHelper orderHelper,
             IMessageFactory messageFactory,
             OrderSettings orderSettings,
-            LocalizationSettings localizationSettings)
+            LocalizationSettings localizationSettings,
+            ShoppingCartSettings shoppingCartSettings,
+            MediaSettings mediaSettings)
         {
             _db = db;
             _orderProcessingService = orderProcessingService;
             _currencyService = currencyService;
             _productUrlHelper = productUrlHelper;
+            _orderHelper = orderHelper;
             _messageFactory = messageFactory;
             _orderSettings = orderSettings;
             _localizationSettings = localizationSettings;
+            _shoppingCartSettings = shoppingCartSettings;
+            _mediaSettings = mediaSettings;
         }
 
         [DisallowRobot]
         public async Task<IActionResult> ReturnRequest(int id /* orderId */)
         {
             var order = await _db.Orders
-                .Include(x => x.OrderItems)
-                .ThenInclude(x => x.Product)
+                .IncludeOrderItems()
                 .FindByIdAsync(id);
 
             if (order == null)
@@ -64,7 +76,7 @@ namespace Smartstore.Web.Controllers
             }
 
             var model = new SubmitReturnRequestModel();
-            await PrepareReturnRequestModelAsync(model, order);
+            await PrepareReturnRequestModel(model, order);
 
             return View(model);
         }
@@ -72,8 +84,11 @@ namespace Smartstore.Web.Controllers
         [HttpPost, ActionName("ReturnRequest")]
         public async Task<IActionResult> ReturnRequestSubmit(int id /* orderId */, SubmitReturnRequestModel model)
         {
-            var order = await _db.Orders.FindByIdAsync(id);
+            var form = Request.Form;
             var customer = Services.WorkContext.CurrentCustomer;
+            var order = await _db.Orders
+                .IncludeOrderItems()
+                .FindByIdAsync(id);
 
             if (order == null)
             {
@@ -90,99 +105,114 @@ namespace Smartstore.Web.Controllers
                 return RedirectToRoute("Homepage");
             }
 
-            foreach (var orderItem in order.OrderItems)
-            {
-                var form = Request.Form;
-
-                var quantity = 0;
-                foreach (var formKey in form.Keys)
+            var items = order.OrderItems
+                .Select(oi => new ReturnRequestItem
                 {
-                    if (formKey.EqualsNoCase($"quantity{orderItem.Id}"))
+                    OrderItem = oi,
+                    ReturnRequest = new ReturnRequest
                     {
-                        _ = int.TryParse(form[formKey], out quantity);
-                        break;
-                    }
-                }
-
-                if (quantity > 0)
-                {
-                    var rr = new ReturnRequest
-                    {
-                        StoreId = Services.StoreContext.CurrentStore.Id,
-                        OrderItemId = orderItem.Id,
-                        Quantity = quantity,
-                        CustomerId = customer.Id,
+                        StoreId = order.StoreId,
+                        OrderItemId = oi.Id,
+                        Quantity = form.TryGetValue($"quantity{oi.Id}", out var qtyValues) ? qtyValues.ToString().ToInt() : 0,
+                        CustomerId = order.CustomerId,
                         ReasonForReturn = model.ReturnReason,
                         RequestedAction = model.ReturnAction,
                         CustomerComments = model.Comments,
                         StaffNotes = string.Empty,
                         ReturnRequestStatus = ReturnRequestStatus.Pending
-                    };
+                    }
+                })
+                .Where(x => x.ReturnRequest.Quantity > 0)
+                .ToList();
 
-                    customer.ReturnRequests.Add(rr);
+            if (items.Count > 0)
+            {
+                _db.ReturnRequests.AddRange(items.Select(x => x.ReturnRequest));
+                await _db.SaveChangesAsync();
 
-                    _db.TryUpdate(customer);
-                    await _db.SaveChangesAsync();
-
-                    model.AddedReturnRequestIds.Add(rr.Id);
-
-                    // Notify store owner here by sending an email.
-                    await _messageFactory.SendNewReturnRequestStoreOwnerNotificationAsync(rr, orderItem, _localizationSettings.DefaultAdminLanguageId);
+                // Notify store owner here by sending an email.
+                foreach (var item in items)
+                {
+                    await _messageFactory.SendNewReturnRequestStoreOwnerNotificationAsync(item.ReturnRequest, item.OrderItem, _localizationSettings.DefaultAdminLanguageId);
                 }
+
+                NotifySuccess(T("ReturnRequests.Submitted"));
+                return RedirectToAction(nameof(CustomerController.Orders), "Customer");
             }
 
-            await PrepareReturnRequestModelAsync(model, order);
-
-            if (model.AddedReturnRequestIds.Any())
-            {
-                model.Result = T("ReturnRequests.Submitted");
-            }
-            else
-            {
-                NotifyWarning(T("ReturnRequests.NoItemsSubmitted"));
-            }
+            ModelState.AddModelError(string.Empty, T("ReturnRequests.NoItemsSubmitted"));
+            await PrepareReturnRequestModel(model, order);
 
             return View(model);
         }
 
-        protected async Task PrepareReturnRequestModelAsync(SubmitReturnRequestModel model, Order order)
+        private async Task PrepareReturnRequestModel(SubmitReturnRequestModel model, Order order)
         {
             Guard.NotNull(order);
             Guard.NotNull(model);
 
             model.OrderId = order.Id;
 
+            var language = Services.WorkContext.WorkingLanguage;
+            var customer = Services.WorkContext.CurrentCustomer;
             var customerCurrency = await _db.Currencies
                 .AsNoTracking()
                 .Where(x => x.CurrencyCode == order.CustomerCurrencyCode)
                 .FirstOrDefaultAsync() ?? new() { CurrencyCode = order.CustomerCurrencyCode };
 
-            foreach (var orderItem in order.OrderItems)
-            {
-                var orderItemModel = new SubmitReturnRequestModel.OrderItemModel
+            var store = Services.StoreContext.GetCachedStores().GetStoreById(order.StoreId) ?? Services.StoreContext.CurrentStore;
+            var catalogSettings = await Services.SettingFactory.LoadSettingsAsync<CatalogSettings>(store.Id);
+
+            var orderItemIds = order.OrderItems.Select(x => x.Id).ToArray();
+            var allExistingRequests = customer.ReturnRequests
+                .Where(x => orderItemIds.Contains(x.OrderItemId))
+                .Select(rr => new CustomerReturnRequestModel
                 {
-                    Id = orderItem.Id,
-                    ProductId = orderItem.Product.Id,
-                    ProductName = orderItem.Product.GetLocalized(x => x.Name),
-                    ProductSeName = await orderItem.Product.GetActiveSlugAsync(),
-                    AttributeInfo = HtmlUtility.FormatPlainText(HtmlUtility.ConvertHtmlToPlainText(orderItem.AttributeDescription)),
-                    Quantity = orderItem.Quantity
+                    Quantity = rr.Quantity,
+                    OrderItemId = rr.OrderItemId,
+                    ReturnRequestStatus = rr.ReturnRequestStatus.GetLocalizedEnum(language.Id),
+                    CreatedOn = Services.DateTimeHelper.ConvertToUserTime(rr.CreatedOnUtc, DateTimeKind.Utc)
+                })
+                .ToMultimap(x => x.OrderItemId, x => x);
+
+            foreach (var oi in order.OrderItems)
+            {
+                var returnRequests = allExistingRequests.TryGetValues(oi.Id, out var tmp) ? tmp.ToList() : [];
+                var oiModel = new SubmitReturnRequestModel.OrderItemModel
+                {
+                    Id = oi.Id,
+                    ProductId = oi.Product.Id,
+                    ProductName = oi.Product.GetLocalized(x => x.Name),
+                    ProductSeName = await oi.Product.GetActiveSlugAsync(),
+                    AttributeInfo = HtmlUtility.FormatPlainText(HtmlUtility.ConvertHtmlToPlainText(oi.AttributeDescription)),
+                    Quantity = Math.Max(oi.Quantity - returnRequests.Sum(x => x.Quantity), 0),
+                    ReturnRequests = returnRequests
                 };
 
-                orderItemModel.ProductUrl = await _productUrlHelper.GetProductUrlAsync(orderItemModel.ProductSeName, orderItem);
+                oiModel.ProductUrl = await _productUrlHelper.GetProductUrlAsync(oiModel.ProductSeName, oi);
 
                 switch (order.CustomerTaxDisplayType)
                 {
                     case TaxDisplayType.ExcludingTax:
-                        orderItemModel.UnitPrice = _currencyService.ConvertToExchangeRate(orderItem.UnitPriceExclTax, order.CurrencyRate, customerCurrency, true);
+                        oiModel.UnitPrice = _currencyService.ConvertToExchangeRate(oi.UnitPriceExclTax, order.CurrencyRate, customerCurrency, true);
                         break;
 
                     case TaxDisplayType.IncludingTax:
-                        orderItemModel.UnitPrice = _currencyService.ConvertToExchangeRate(orderItem.UnitPriceInclTax, order.CurrencyRate, customerCurrency, true);
+                        oiModel.UnitPrice = _currencyService.ConvertToExchangeRate(oi.UnitPriceInclTax, order.CurrencyRate, customerCurrency, true);
                         break;
                 }
 
-                model.Items.Add(orderItemModel);
+                if (_shoppingCartSettings.ShowProductImagesOnShoppingCart)
+                {
+                    oiModel.Image = await _orderHelper.PrepareOrderItemImageModelAsync(
+                        oi.Product,
+                        _mediaSettings.CartThumbPictureSize,
+                        oiModel.ProductName,
+                        oi.AttributeSelection,
+                        catalogSettings);
+                }
+
+                model.Items.Add(oiModel);
             }
 
             string returnRequestReasons = _orderSettings.GetLocalizedSetting(x => x.ReturnRequestReasons, order.CustomerLanguageId, order.StoreId, true, false);
@@ -197,6 +227,12 @@ namespace Smartstore.Web.Controllers
                 .SplitSafe(',')
                 .Select(x => new SelectListItem { Text = x, Value = x })
                 .ToList();
+        }
+
+        record ReturnRequestItem
+        {
+            public OrderItem OrderItem { get; init; }
+            public ReturnRequest ReturnRequest { get; init; }
         }
     }
 }

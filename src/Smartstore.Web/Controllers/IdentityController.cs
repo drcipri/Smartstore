@@ -89,7 +89,6 @@ namespace Smartstore.Web.Controllers
             {
                 CustomerLoginType = _customerSettings.CustomerLoginType,
                 CheckoutAsGuest = checkoutAsGuest.GetValueOrDefault(),
-                DisplayCaptcha = _captchaSettings.CanDisplayCaptcha && _captchaSettings.ShowOnLoginPage,
             };
 
             ViewBag.ReturnUrl = Url.IsLocalUrl(returnUrl) ? returnUrl : Url.Content("~/");
@@ -100,16 +99,11 @@ namespace Smartstore.Web.Controllers
         [HttpPost]
         [TypeFilter(typeof(DisplayExternalAuthWidgets))]
         [AllowAnonymous, NeverAuthorize]
-        [ValidateCaptcha(CaptchaSettingName = nameof(CaptchaSettings.ShowOnLoginPage))]
+        [ValidateCaptcha(CaptchaSettings.Targets.Login)]
         [ValidateAntiForgeryToken, CheckStoreClosed(false)]
         [LocalizedRoute("/login", Name = "Login")]
-        public async Task<IActionResult> Login(LoginModel model, string returnUrl, string captchaError)
+        public async Task<IActionResult> Login(LoginModel model, string returnUrl)
         {
-            if (_captchaSettings.ShowOnLoginPage && captchaError.HasValue())
-            {
-                ModelState.AddModelError(string.Empty, captchaError);
-            }
-
             if (!Url.IsLocalUrl(returnUrl))
             {
                 returnUrl = string.Empty;
@@ -176,7 +170,6 @@ namespace Smartstore.Web.Controllers
 
             // If we got this far something failed. Redisplay form!
             model.CustomerLoginType = _customerSettings.CustomerLoginType;
-            model.DisplayCaptcha = _captchaSettings.CanDisplayCaptcha && _captchaSettings.ShowOnLoginPage;
 
             return View(model);
         }
@@ -231,10 +224,10 @@ namespace Smartstore.Web.Controllers
 
         [HttpPost]
         [AllowAnonymous, NeverAuthorize]
-        [ValidateCaptcha(CaptchaSettingName = nameof(CaptchaSettings.ShowOnRegistrationPage))]
+        [ValidateCaptcha(CaptchaSettings.Targets.Registration)]
         [ValidateAntiForgeryToken, ValidateHoneypot]
         [LocalizedRoute("/register", Name = "Register")]
-        public async Task<IActionResult> Register(RegisterModel model, string captchaError, string returnUrl = null)
+        public async Task<IActionResult> Register(RegisterModel model, string returnUrl = null)
         {
             // Check whether registration is allowed.
             if (_customerSettings.UserRegistrationType == UserRegistrationType.Disabled)
@@ -249,11 +242,6 @@ namespace Smartstore.Web.Controllers
                 // await _signInManager.SignOutAsync();
 
                 return RedirectToRoute("RegisterResult", new { message = T("Account.Register.Result.AlreadyRegistered").Value });
-            }
-
-            if (_captchaSettings.ShowOnRegistrationPage && captchaError.HasValue())
-            {
-                ModelState.AddModelError(string.Empty, captchaError);
             }
 
             // TODO: (mh) Password validation is already performed in the UserManager.AddPasswordAsync method. Refactor workflow.
@@ -508,25 +496,16 @@ namespace Smartstore.Web.Controllers
         [LocalizedRoute("/passwordrecovery", Name = "PasswordRecovery")]
         public IActionResult PasswordRecovery()
         {
-            var model = new PasswordRecoveryModel
-            {
-                DisplayCaptcha = _captchaSettings.CanDisplayCaptcha && _captchaSettings.ShowOnPasswordRecoveryPage
-            };
-
+            var model = new PasswordRecoveryModel();
             return View(model);
         }
 
         [HttpPost, DisallowRobot]
-        [ValidateCaptcha(CaptchaSettingName = nameof(CaptchaSettings.ShowOnPasswordRecoveryPage))]
+        [ValidateCaptcha(CaptchaSettings.Targets.PasswordRecovery)]
         [LocalizedRoute("/passwordrecovery", Name = "PasswordRecovery")]
         [FormValueRequired("send-email")]
-        public async Task<IActionResult> PasswordRecovery(PasswordRecoveryModel model, string captchaError)
+        public async Task<IActionResult> PasswordRecovery(PasswordRecoveryModel model)
         {
-            if (_captchaSettings.ShowOnPasswordRecoveryPage && captchaError.HasValue())
-            {
-                ModelState.AddModelError(string.Empty, captchaError);
-            }
-
             if (ModelState.IsValid)
             {
                 var customer = await _userManager.FindByEmailAsync(model.Email);
@@ -548,9 +527,6 @@ namespace Smartstore.Web.Controllers
 
                 return View(model);
             }
-
-            // If we got this far something failed. Redisplay form.
-            model.DisplayCaptcha = _captchaSettings.CanDisplayCaptcha && _captchaSettings.ShowOnPasswordRecoveryPage;
 
             return View(model);
         }
@@ -640,8 +616,8 @@ namespace Smartstore.Web.Controllers
             }
 
             // Sign in the user with this external login provider if the user already has a login.
-            var result = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, false);
-            if (result.Succeeded)
+            var signinResult = await _signInManager.ExternalLoginSignInAsync(info.LoginProvider, info.ProviderKey, false);
+            if (signinResult.Succeeded)
             {
                 var customer = await _userManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
                 if (customer != null)
@@ -674,10 +650,11 @@ namespace Smartstore.Web.Controllers
                         identityResult = await _userManager.AddLoginAsync(customer, info);
                         if (identityResult.Succeeded)
                         {
-                            return await FinalizeCustomerRegistrationAsync(customer, returnUrl);
-                        }
+                            var result = await FinalizeCustomerRegistrationAsync(customer, returnUrl);
+                            await FinalizeLoginAsync(Services.WorkContext.CurrentCustomer, customer, logActivity: true);
 
-                        await FinalizeLoginAsync(Services.WorkContext.CurrentCustomer, customer, logActivity: true);
+                            return result;
+                        }
                     }
 
                     // Display errors to user.
@@ -732,7 +709,7 @@ namespace Smartstore.Web.Controllers
 
             model.UsernamesEnabled = _customerSettings.CustomerLoginType != CustomerLoginType.Email;
             model.CheckUsernameAvailabilityEnabled = _customerSettings.CheckUsernameAvailabilityEnabled;
-            model.DisplayCaptcha = _captchaSettings.CanDisplayCaptcha && _captchaSettings.ShowOnRegistrationPage;
+            model.DisplayCaptcha = _captchaSettings.IsActiveTarget(CaptchaSettings.Targets.Registration);
 
             ViewBag.AvailableTimeZones = _dateTimeHelper.GetSystemTimeZones()
                 .ToSelectListItems(_dateTimeHelper.DefaultStoreTimeZone.Id);

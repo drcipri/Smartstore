@@ -1,9 +1,8 @@
 ﻿using Autofac;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Options;
-using Smartstore.Core.Theming;
 using Smartstore.Engine.Builders;
+using Smartstore.Engine.Modularity;
 using Smartstore.IO;
 using Smartstore.Web.Bundling;
 using Smartstore.Web.Bundling.Processors;
@@ -17,34 +16,8 @@ namespace Smartstore.Web.Bootstrapping
             RunAfter<MvcStarter>();
         }
 
-        private static IFileProvider ResolveThemeFileProvider(string themeName, IApplicationContext appContext)
-        {
-            var themeRegistry = appContext.Services.Resolve<IThemeRegistry>();
-            return themeRegistry?.GetThemeDescriptor(themeName)?.WebRoot;
-        }
-
-        private static IFileProvider ResolveModuleFileProvider(string moduleName, IApplicationContext appContext)
-        {
-            var module = appContext.ModuleCatalog.GetModuleByName(moduleName, false);
-            if (module != null)
-            {
-                // Don't allow theme companion modules serving static files by "/modules" path
-                return module.Theme.IsEmpty() ? module.WebRoot : null;
-            }
-
-            return null;
-        }
-
         public override void ConfigureContainer(ContainerBuilder builder, IApplicationContext appContext)
         {
-            // Configure & register asset file provider
-            var assetFileProvider = new AssetFileProvider(appContext.WebRoot);
-
-            assetFileProvider.AddFileProvider("themes/", ResolveThemeFileProvider);
-            assetFileProvider.AddFileProvider("modules/", ResolveModuleFileProvider);
-            assetFileProvider.AddFileProvider(".app/", new SassFileProvider(appContext));
-
-            builder.RegisterInstance<IAssetFileProvider>(assetFileProvider);
             builder.RegisterType<BundlingOptionsConfigurer>().As<IConfigureOptions<BundlingOptions>>().SingleInstance();
             builder.RegisterType<BundleContextAccessor>().As<IBundleContextAccessor>().SingleInstance();
 
@@ -71,10 +44,23 @@ namespace Smartstore.Web.Bootstrapping
 
             builder.Configure(StarterOrdering.StaticFilesMiddleware, app =>
             {
+                var assetFileProvider = app.ApplicationServices.GetRequiredService<IAssetFileProvider>();
+                assetFileProvider.AddFileProvider(".app/", new SassFileProvider(builder.ApplicationContext));
+
                 app.UseStaticFiles(new StaticFileOptions
                 {
-                    FileProvider = builder.ApplicationBuilder.ApplicationServices.GetRequiredService<IAssetFileProvider>(),
-                    ContentTypeProvider = MimeTypes.ContentTypeProvider
+                    FileProvider = assetFileProvider,
+                    ContentTypeProvider = MimeTypes.ContentTypeProvider,
+                });
+
+                // Server static files from ".well-known" folder (e.g. for verification files)
+                app.UseStaticFiles(new StaticFileOptions
+                {
+                    FileProvider = new ExpandedFileSystem(".well-known", builder.ApplicationContext.WebRoot),
+                    RequestPath = "/.well-known",
+                    ServeUnknownFileTypes = true,
+                    // Some text-based verification files have no extension
+                    DefaultContentType = "text/plain"
                 });
             });
         }

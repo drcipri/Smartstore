@@ -123,14 +123,15 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
 }
 
 .pd-attrs {
-    td { 
-        padding: 0.2rem 0; 
-        vertical-align: middle; 
+    :is(td, th[scope=row]) {
+        padding: 0.2rem 0;
+        vertical-align: middle;
         line-height: $pd-line-height;
-    }
-    td:first-child { 
-        padding-inline-end: 1rem; 
-        font-weight: $font-weight-medium; 
+
+        &:first-child {
+            padding-inline-end: 1rem;
+            font-weight: $font-weight-medium;
+        }
     }
 }
 
@@ -139,7 +140,7 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
         color: darken($success, 10%);
     }
     &.pd-outofstock {
-        font-weight: bold;
+        font-weight: $font-weight-bold;
         color: $danger;
     } 
 }
@@ -147,17 +148,27 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
 // Specification attributes
 // =====================================================
 
-.pd-specs-table tr:first-child td {
+.pd-specs-group .pd-specs-table {
+    //font-size: 90%;
+    font-size: $font-size-sm;
+}
+
+.pd-specs-table tr:first-child > :is(td, th) {
     border-top-width: 0;
 }
 
 .pd-spec-name {
     font-weight: $font-weight-medium;
+    padding-inline-start: 0 !important;
     width: 20%;
 
     @include media-breakpoint-down(md) {
         width: 40%;
     }
+}
+
+.pd-spec-value {
+    padding-inline-end: 0 !important;
 }
 
 // Reviews
@@ -544,20 +555,27 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
         border-inline-end: 1px solid rgba(#000, 0.15);
         padding-top: 6px; // for the transform
         padding-bottom: $focus-ring-width; // For visual focus
-        &:last-child { border-color: transparent; }
-
+        &:last-child {
+            border-color: transparent;
+        }
         // When more than 4 action items are available,
         // .col is used instead of .col-(x). These need special care
         // concerning responsiveness.
         &.col .pd-action-label, &.col-2 .pd-action-label {
             display: none !important;
-            @include media-breakpoint-only(sm) { display: block !important;  }
-            @include media-breakpoint-up(xl) { display: block !important;  }
+
+            @include media-breakpoint-only(sm) {
+                display: block !important;
+            }
+
+            @include media-breakpoint-up(xl) {
+                display: block !important;
+            }
         }
     }
 
     .pd-action-link {
-        display: flex;
+        display: inline-flex;
         flex-direction: column;
         text-decoration: none;
         color: inherit;
@@ -580,7 +598,7 @@ $pd-offer-spacing:              $grid-gutter-width / 2;
             text-overflow: ellipsis;
         }
 
-        &:hover .pd-action-icon { 
+        &:hover .pd-action-icon {
             color: inherit;
             transform: scale(1.14);
         }

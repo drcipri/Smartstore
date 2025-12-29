@@ -159,10 +159,10 @@
         <Value>Number of days after products should expire or no longer appear. A value of 0 causes that no expiry date will be exported.</Value>
     </LocaleResource>
     <LocaleResource Name="ExportShipping">
-        <Value>Export shipping weight</Value>
+        <Value>Export shipping data</Value>
     </LocaleResource>
     <LocaleResource Name="ExportShipping.Hint">
-        <Value>Activate this option if you want to export the weight of the product.</Value>
+        <Value>Activate this option if you want to export optional shipping data like the weight, length, width and height of a product.</Value>
     </LocaleResource>
     <LocaleResource Name="ExportShippingTime">
         <Value>Export delivery time</Value>
@@ -202,6 +202,12 @@
     </LocaleResource>
     <LocaleResource Name="EnergyEfficiencyClasses">
         <Value>A,B,C,D,E,F,G</Value>
+    </LocaleResource>
+    <LocaleResource Name="AssignableFiles">
+        <Value>Pictures</Value>
+    </LocaleResource>
+    <LocaleResource Name="AssignableFiles.Hint">
+        <Value>Specifies the images to be exported. Google supports exporting up to ten images. Depending on the "Additional images" export profile setting, either the first image or up to ten images will be exported unless otherwise specified here.</Value>
     </LocaleResource>
     <LocaleResource Name="CustomLabel0">
         <Value>Label 0</Value>

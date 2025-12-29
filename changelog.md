@@ -1,68 +1,221 @@
 # Release Notes
 
-## Smartstore 6.2.0
+## Smartstore 6.3.0
 
 ### Breaking Changes
-- Web API: The `PaymentMethods/GetAllPaymentMethods` endpoint has been enhanced to return all information about a payment provider.
+
+- (DEV) Added `IEventMessage` marker interface and enforced it across the pub/sub pipeline to standardize and validate event contracts.
 
 ### WCAG (Web Content Accessibility Guidelines)
 
-- The following frontend sections have been made accessible to screen readers:
-  - Laguage and currency selectors
-  - Customer's "My account", order and shipment details, and return requests.
-  - Customer identity features such as login and registration.
-  - Catalog and associated products search boxes
-  - All elements in the footer
-  - Article list actions
-  - CookieManager dialog. It also traps the focus until it's closed.
-  - Catalog facets
-  - Contact us
-  - Checkout process
-  - Product detail pages
-  - Offcanvas Menu 
-  - Offcanvas Cart
-  
-- The following plugins have been updated to provide better accessibility for screen readers:
-  - Blog
-  - Direct Order
-  - Email Reminder
-  - File Manager
-  - Forums
-  - GDPR
-  - MegaSearchPlus (extended facet templates)
-  - News
-  - Offline Payment
-  - Polls
-  - Wallet
+- Added **Skip list** button for all product, category, tag, blog and news listings.
+- The following frontend sections have been updated to improve accessibility for screen readers:
+  - Homepage products, categories, brands and product tags.
+  - Compare products, wishlist and cart page.
+  - Checkout process.
+  - Product lists.
+  - "All manufacturers" page.
+  - PhotoSwipe
+  - PageBuilder story blocks.
+- Summernote: Allow query string in mp4, webm and ogg urls.
 
-- A script to handle key navigation has been implemented. It identifies the role of several components and determines their navigateable child elements.
-	- MenuPlugin handles all items of role="menubar" based on subitems of role="menu" & role="menuitem". It is used in ...
-		- the main catalog navigation in the simple version, without the MegaMenu plugin, and in the MegaMenu version.
-	- TablistPlugin handles all items of role="tablist" based on subitems role="tab". It is used in ...
-		- the Offcanvas Menu 
-		- the Offcanvas Cart
-	- TreePlugin handles all items of role="tree" based on subitems of role="treeitem". It is used in ...
-		- the catalog navigation in the Offcanvas Menu
-	- ListboxPlugin handles widgets using role="listbox" based on subitems of role="option". It is used in ...
-		- language and currency select lists
-		- all dropdown menus rendered by menu TagHelper
-		- Variant color squares in art list 
-	- DisclosurePlugin handles standalone disclosures & accordions. It is used in ...
-		- CookieManager dialog
-		- Article list dropdowns (.art-drop is the element which contains article actions e.g. add to cart, add to wishlist)
-		- Product list filter button for mobile devices
-		- Footer (on mobile displays)
-		- My account toggler (on mobile displays)
-	- ComboboxPlugin integrates ListboxPlugin navigation, opens/closes the dropdown, and supports both single- and multi-select via data-ak-multiselect=true. It is used in ...
-		- Article list sorting dropdown
-		- language and currency selector
-	
-- A script has been implemented to handle focus trapping for modal components. While a modal is open, Tab cycles from the last to the first focusable element (and Shift + Tab the reverse), so keyboard focus cannot leave the modal until it is closed.  
-- Nested nav elements were removed from the top bar.
-- Removed zooming constrictions from viewport meta property.
-- The 'Skip to main content' button has been implemented.
+### New Features
 
-	​	
+- **AI**
+  - Edit images in the Media Manager using a text prompt and selected images.
+  - File-based provider metadata used to store and organize information about LLM models.
+  - Added **Anthropic Claude** AI provider.
+  - Added **Ollama** AI provider.
+  - **ChatGPT:**
+    - Support text and image generation using `GPT 5.1`
+  - **Gemini**: 
+    - Support text generation using `Gemini 3.0 Pro`
+    - Support image generation and editing using `Nano Banana Pro` (gemini-3-pro-image-preview).
+    - Support image generation and editing using `Nano Banana` (gemini-2.5-flash-image).
+- **Payment**
+  - PayPal: Added support for **Apple Pay**.
+  - #1370 Add a payment provider for **easyCredit purchase on account**.
+- **CAPTCHA**
+  - Modular CAPTCHA architecture with a pluggable provider interface.
+  - Replaced hard-wired reCAPTCHA logic with a provider model.
+  - **CaptchaFox** integration (commercial module)
+  - **Friendly Captcha** integration (commercial module).
+- #112 Visually group specification attributes on product detail page.
+- #1381 Add a compare price to attribute combinations.
+- #1386 Customer roles: Extend the permission tree so that nodes with descendants show whether descendant permissions have been granted.
+- #934 Add cart rules property to PageBuilder stories to dynamically toggle their visibility.
+- #1264 Batch-assign products to categories.
+- New **Rule Builder** rules:
+  - #1372 Cart rule for the total cart weight.
+  - Cart rule that checks whether a product from a category or one of its subcategories is in the shopping cart.
+  - Cart rule to check that all products in the shopping cart are from the specified categories.
+  - #1425 Cart rule that is fulfilled when the customer is subscribed to the newsletter.
+- #1357 Pricing: Add a setting that takes tiered prices of products into account, that are assigned by an attribute of type "linked product".
+- #690 **Apple Sign-In** support
+- Added support for extensionless static files in `wwwroot/.well-known` directory
+- FileManager: Enabled language dependent tabs
+- **GMC**
+  - #1341 Enable the selection of product images to be exported.
+  - Export more shipping data (handling time, length, width and height of a product).
+- EmailReminder: Added Google Reviews to the review reminder.
+- #1411 **Pixlr**: The user should decide on a session basis whether to open the express or full editor.
+
+### Improvements
+
+* Bumped all `jquery.validate` libraries
+* Asset Bundling: Replaced `DouglasCrockford.JsMin` with `NUglify`.
+* **Summernote**
+  * Horizontal editor resizer
+  * Activated file browser (MediaManager)
+  * Responsive video embed
+* **Blog**
+  * New global display options: Grid layout, 2/3 column mode, intro length restriction, aspect ratio setting for grid view.
+  * Mobile optimization: Pictures will now always be displayed above text on mobile devices.
+  * Better control of preview image display by setting the aspect ratio.
+  * Better control of detail image display by setting the *Maximum height of the picture*
+  * New setting for the *Navigation End Date*
+  * #1410 Blog posts configured for a single language will no longer return a 404 error when accessed with an unavailable language selection.  
+* Theming: `.art-drop` should adopt `$art-active-border-color`
+- #1016 Don't ask registered customers for email when entering billing or shipping address.
+- #1327 Product rules/MegaSearch: Consider start and end dates of a discount when applying the "HasDiscount" rule.
+- Allow new attribute options to be added when assigning specification attributes to a product.
+- EasyCredit: Do not hide the installment calculator if EasyCredit is not offered at checkout due to cart rules.
+- etracker: Updated module to use latest script & added event submission for product view, list view and orders. 
+- Added option for queued email grid to filter for subject.
+- #1122 AI: Replace the Betalgo library with the official OpenAI .NET library.
+- #1393 Missing bubble help hints in the backend address editor template.
+- Public export files have been moved to a new tenant folder for data exchange.
+- Return Requests:
+  - #1196 Avoid duplicate return requests for a product.
+  - The quantity to return reflects the number of products that have already been returned.
+  - Display information about products that have already been returned, including their current status.
+- Web API: Allow guest customers to be created.
+- Convert JSON strings to HTML for notifications.
+- Trailing slash URL rule: Don't apply rule to static file requests (e.g. `robots.txt`).
+- #1156 The last items added to the basket must be instantly visible in offcanvas cart.
+- #208 Linkbuilder: Added possibility to define a link target.
+- #1404 FileManager must not render tab content via AJAX, as search engines must be able to read the content in its entirety.
+- PostFinance: Migrated to Wallee REST API v2.
+- Support of multiple discounts with the same coupon code.
+
+### Bugfixes
+
+- #1433 The shopping cart is not migrated when a new customer account is created using external authentication.
+- ChatGPT: Fixed image creation errors "Invalid value".
+- Attribute combination image could not be selected on product edit page.
+- #1361 Add a migration to consolidate duplicate `ActivityLogType` entries.
+- Fixed unnecessary single navigation dot in slick slider.
+- EntityPicker did not remove unselected items from preselection in append mode.
+- MegaSearch: Take customer roles and store restrictions into account when selecting the top entities.
+- **MegaMenu** 
+  - The background image should not overlap the menu item content.
+  - The link count in a single column often exceeds the configured setting.
+  - Fixed duplicate key error in `IX_MegaMenu_EntityId` index.
+- After applying a discount code or moving a product to the wish list, deactivated shopping cart products were not displayed.
+- **PageBuilder**
+  - #1367 Do not hide the setting that displays the manufacturer's name in slider product lists.
+  - Video in a video block was not rendering in Chrome.
+- Fixed missing log entry and notification for a payment exception.
+- **Stripe** 
+	- Orders were created after the 3D Secure check, even though the payment was declined.
+	- Set selected payment method on customer level was missing when using *Link* cart button. 
+	- Restored setting of correct payment status.
+	- Better handling of web hook messages. 
+- **PostFinance**
+  - Fixed an issue where the amount paid sometimes differs from the order total.
+  - #1423 Avoid "The provided security token is invalid" error due to security token expiration.
+  - Occasionally, orders were not automatically marked as "paid".
+- **Wallet**
+  - Fixed formatting of currency amounts in message template.
+  - Save the order ID when editing a wallet entry in the wallet grid on the customer edit page.
+  -	Clicking on the "wallet" link in the notification message produced a 404 error.
+  - #1432 Wallet: Use service methods for Web API REST endpoints.
+- AmazonPay: Do not apply the customer email address for guests.
+- Payment methods with rules are missing on the customer edit page when changing the preferred payment method.
+- Verify balanced parentheses in data grid search filter expressions, preventing runaway memory usage from malformed search terms.
+- Do not display the default date value when adding reward points via backend grid.
+- Avoid HTTP error 500, which can be caused by an attribute alias that is too long.
+- When filtering products without category assignment, deleted categories must not be included.
+- AI
+	- Fixed streaming problem if the original HTML contains comments.
+	- Fixed streaming problem with HTML entities (e.g. &amp;)
+- Link builder: The editor displayed an URL with an attached link target.
+- #1444 SQLite throws "'JULIANDAY' was constructed with 1 arguments, but the nullability was defined for 2 arguments"
+
+
+## Smartstore 6.2.0
+
+### Breaking Changes
+* **Web API:** The `PaymentMethods/GetAllPaymentMethods` endpoint has been enhanced to return all information about a payment provider.
+
+### WCAG (Web Content Accessibility Guidelines)
+
+* The following frontend sections have been made accessible to screen readers:
+
+  * **Language** and **Currency** selectors
+  * Customers’ **“My Account”** area, order and shipment details, and return requests
+  * Customer‑identity features such as login and registration
+  * Catalog and associated products search boxes
+  * All elements in the footer
+  * Article list actions
+  * **CookieManager** dialog, which also traps focus until it is closed
+  * Catalog facets
+  * Contact Us
+  * Checkout process
+  * Product detail pages
+  * Off‑canvas Menu
+  * Off‑canvas Cart
+
+* The following plugins have been updated to provide better accessibility for screen readers:
+
+  * Blog
+  * Direct Order
+  * Email Reminder
+  * File Manager
+  * Forums
+  * GDPR
+  * MegaSearchPlus (extended facet templates)
+  * News
+  * Offline Payment
+  * Polls
+  * Wallet
+
+* A script to handle **key navigation** has been implemented. It identifies the roles of several components and determines their **navigable** child elements.
+
+  * `MenuPlugin` handles all items with `role="menubar"` based on sub‑items with `role="menu"` and `role="menuitem"`. It is used in …
+
+    * the main catalog navigation in the simple version, without the MegaMenu plugin, and in the MegaMenu version
+  * `TablistPlugin` handles all items with `role="tablist"` based on sub‑items with `role="tab"`. It is used in …
+
+    * the Off‑canvas Menu
+    * the Off‑canvas Cart
+  * `TreePlugin` handles all items with `role="tree"` based on sub‑items with `role="treeitem"`. It is used in …
+
+    * the catalog navigation in the Off‑canvas Menu
+  * `ListboxPlugin` handles widgets using `role="listbox"` based on sub‑items with `role="option"`. It is used in …
+
+    * language and currency select lists
+    * all dropdown menus rendered by `MenuTagHelper`
+    * variant‑color square boxes in product listings
+  * `DisclosurePlugin` handles standalone disclosures and accordions. It is used in …
+
+    * **CookieManager** dialog
+    * article‑list dropdowns (`.art-drop`, which contains article actions such as Add to Cart and Add to Wishlist)
+    * product‑list filter button (mobile)
+    * footer (mobile)
+    * **My Account** toggler (mobile)
+  * `ComboboxPlugin` integrates `ListboxPlugin` navigation, opens **and** closes the dropdown, and supports both single‑ and multi‑select via `data-ak-multiselect=true`. It is used in …
+
+    * article‑list sorting dropdown
+    * language and currency selector
+
+* A script has been implemented to handle **focus trapping for modal components**. While a modal is open, **Tab** cycles from the last to the first focusable element (and **Shift + Tab** does the reverse), so keyboard focus cannot leave the modal until it is closed.
+
+* Nested `<nav>` elements have been removed from the top bar.
+
+* Removed zooming **constraints** from the `viewport` meta property.
+
+* A **Skip to main content** button has been implemented.
 
 ### New Features
 
@@ -70,40 +223,44 @@
 
 ### Improvements
 
-- Allow an order to be completed if its payment has been refunded.
-- The author of a blog or news post has been added to the Open Graph metadata.
-- Stripe: 
-	- Void the order if a message about a failed payment has been sent to the webhook. 
-	- Payment status (Paid & Authorized) was set too early in the checkout process. 
+* Allow an order to be completed if its payment has been refunded.
+* The author of a blog or news post has been added to the Open Graph metadata.
+* **Stripe:**
+
+  * Void the order if the webhook receives a message about a failed payment.
+  * Payment status (Paid & Authorized) was set too early in the checkout process.
 
 ### Bugfixes
 
-- The order of products in lists was reversed for featured sorting.
-- Fixed a `NullReferenceException` on the cart page when shopping cart items are activated or deactivated.
-- Fixed `ArgumentNullException` when adding a product to a category if `SearchSettings.UseCatalogSearchInBackend` is enabled.
-- #1360 Deleting a product review that includes helpfulness entries results in a `SqlException`.
-- Fixed `Failed to read NuGet.config due to unauthorized access` exception.
-- **Summernote**
-  - Browsing and selecting files in the link or image dialog also closes the opener dialog.
-  - Fixed list/paragraph toggle conflict when `li` contains `p`
-- Forum: Avoid 404 when viewing deleted customer profile.
-- My-account header only shows uploaded avatar after page reload.
-- **PageBuilder**
-  - Slick slider cuts off the edit toolbar.
-  - Some widget zone names appeared twice when editing a story.
-  - Fixed: Product details were not updating when a story with a slick slider was placed in the widget zone `productdetail_offer_after`.
-- The "Latest Orders" dashboard does not display the full name of guests.
-- A bug that caused an old script to be loaded from the browser cache, resulting in an endless minibasket loading process, has been fixed.
-- The handling of multi-store settings for the AI modules and performance settings has been corrected.
-- Added route attribute to the actions Patch and PatchLocalized of the EntityController to avoid a 404 error which occurred under certain undetermined conditions.
-- Use a relative product URL instead of an absolute one to avoid the JS error "Failed to execute replaceState on History".
-- PayPal: If Google Pay was initially selected on the payment selection page, a script error occurred which prevented all PayPal buttons from loading.
-- AmazonPay: Fixed issue of the private key being unintentionally deleted when saving a multistore configuration.
-- Added missing xml declaration to sitemap index file.
-- Do not create database tables for `NamedEntity` and `VariantValueMetadata`.
-- Customer profile did not display the private message button or the forum statistics.
-- Fixed display of error notification in OffCanvasCart.
-- Do not display `ActivityLogType` with the same system keyword multiple times.
+* The order of products in lists was reversed for featured sorting.
+* Fixed a `NullReferenceException` on the cart page when shopping‑cart items were activated or deactivated.
+* Fixed an `ArgumentNullException` when adding a product to a category if `SearchSettings.UseCatalogSearchInBackend` is enabled.
+* **#1360:** Deleting a product review that included helpfulness entries resulted in a `SqlException`.
+* Fixed the `Failed to read NuGet.config due to unauthorized access` exception.
+* **Summernote**
+
+  * Browsing and selecting files in the link or image dialog now also closes the opener dialog.
+  * Fixed the list/paragraph toggle conflict when an `li` contains a `p`.
+* **Forum:** Avoided a 404 when viewing a deleted customer profile.
+* The **MyAccount** header only showed the uploaded avatar after a page reload.
+* **PageBuilder**
+* The *Slick* slider cut off the edit toolbar.
+  * Some widget‑zone names appeared twice when editing a story.
+  * **Fixed:** Product details were not updating when a story with a *Slick* slider was placed in the widget zone `productdetail_offer_after`.
+* The **Latest Orders** dashboard did not display guests’ full names.
+* Fixed a bug that caused an old script to be loaded from the browser cache, resulting in endless minibasket loading.
+* Corrected handling of multi‑store settings for AI modules and performance settings.
+* Added a **Route** attribute to the `Patch` and `PatchLocalized` actions of `EntityController` to avoid a 404 error that occurred under certain conditions.
+* Use a relative product URL instead of an absolute one to avoid the JS error `Failed to execute replaceState on History`.
+* **PayPal:** If Google Pay was initially selected on the payment selection page, a script error prevented all PayPal buttons from loading.
+* **Amazon Pay:** Fixed an issue where the private key was unintentionally deleted when saving a multistore configuration.
+* Added a missing XML declaration to the sitemap index file.
+* Do not create database tables for `NamedEntity` and `VariantValueMetadata`.
+* The customer profile did not display the Private Message button or forum statistics.
+* Fixed display of error notifications in **Off‑canvas Cart**.
+* Do not display `ActivityLogType` entries with the same system keyword multiple times.
+
+
 
 
 ## Smartstore 6.1.0

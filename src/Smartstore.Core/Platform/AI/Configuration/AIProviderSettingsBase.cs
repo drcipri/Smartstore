@@ -38,23 +38,41 @@ namespace Smartstore.Core.AI
         public float TopP { get; set; } = 1;
 
         /// <summary>
-        /// Gets or sets the names of the offered AI models to generate text.
+        /// Specifies the names of preferred text generation models. 
+        /// May also contain custom models that are not listed in metadata.json.
+        /// Leave empty to use the provider's default preferred models.
         /// The available AI models depend on the used AI provider.
         /// </summary>
-        /// <example>chatgpt-4o-latest</example>
+        public string[] PreferredTextModels { get; set; }
+
+        /// <summary>
+        /// Specifies the names of preferred image generation models.
+        /// May also contain custom models that are not listed in metadata.json.
+        /// Leave empty to use the provider's default preferred models.
+        /// The available AI models depend on the used AI provider.
+        /// </summary>
+        public string[] PreferredImageModels { get; set; }
+
+        /// <summary>
+        /// Gets or sets the name of the AI model used to analyze images (vision).
+        /// </summary>
+        /// <example>gpt-4o</example>
+        public string ImageAnalyzerModelName { get; set; }
+
+        /// <summary>
+        /// Gets or sets the names of the preferred custom AI models to generate text.
+        /// The available AI models depend on the used AI provider.
+        /// </summary>
+        /// <example>gpt-5</example>
+        [Obsolete("Use PreferredTextModels instead. This property will be removed in a future version.")]
         public string[] TextModelNames { get; set; }
 
         /// <summary>
-        /// Gets or sets the names of the offered AI models to create images.
+        /// Gets or sets the names of the preferred custom AI models to create images.
         /// The available AI models depend on the used AI provider.
         /// </summary>
-        /// <example>dall-e-3</example>
+        /// <example>gpt-image-1</example>
+        [Obsolete("Use PreferredImageModels instead. This property will be removed in a future version.")]
         public string[] ImageModelNames { get; set; }
-
-        /// <summary>
-        /// Gets or sets the name of the AI model used to analyze images.
-        /// </summary>
-        /// <example>chatgpt-4o-latest</example>
-        public string ImageAnalyzerModelName { get; set; }
     }
 }

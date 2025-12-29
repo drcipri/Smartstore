@@ -1,7 +1,7 @@
-﻿using DouglasCrockford.JsMin;
-using Microsoft.AspNetCore.Razor.TagHelpers;
+﻿using Microsoft.AspNetCore.Razor.TagHelpers;
 using Smartstore.Caching;
 using Smartstore.Utilities;
+using Smartstore.Web.Bundling.Processors;
 
 namespace Smartstore.Web.TagHelpers.Shared
 {
@@ -30,7 +30,7 @@ namespace Smartstore.Web.TagHelpers.Shared
 
         public override async Task ProcessAsync(TagHelperContext context, TagHelperOutput output)
         {
-            if (!Minify /*|| CommonHelper.IsDevEnvironment*/)
+            if (!Minify || CommonHelper.IsDevEnvironment)
             {
                 // Proceed only if enabled or in release mode
                 return;
@@ -61,8 +61,11 @@ namespace Smartstore.Web.TagHelpers.Shared
 
                 try
                 {
-                    // Return the minified the JavaScript code
-                    return new JsMinifier().Minify(originalContent);
+                    // Return the minified JavaScript code
+                    //var minContent = NUglifyJsMinProcessor.Instance.MinifyCore(originalContent);
+                    //return minContent.Code;
+                    var minContent = JsMinProcessor.Minifier.Minify(originalContent);
+                    return minContent;
                 }
                 catch
                 {

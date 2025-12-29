@@ -124,14 +124,14 @@ namespace Smartstore.Core.Checkout.Orders
                         await _eventPublisher.PublishOrderPaidAsync(ctx.Order);
                     }
                 }
-
-                return ctx.Result;
             }
-            catch
+            catch (Exception ex)
             {
                 await transaction.RollbackAsync(cancelToken);
-                throw;
+                ex.ReThrow();
             }
+
+            return ctx.Result;
         }
 
         public virtual Task<(IList<string> Warnings, ShoppingCart Cart)> ValidateOrderPlacementAsync(
@@ -167,6 +167,8 @@ namespace Smartstore.Core.Checkout.Orders
                 warnings.Add(T("Customer.DoesNotExist"));
                 return (warnings, cart);
             }
+
+            var isGuest = customer.IsGuest();
 
             // Check whether guest checkout is allowed.
             if (!_orderSettings.AnonymousCheckoutAllowed && !customer.IsRegistered())
@@ -263,7 +265,7 @@ namespace Smartstore.Core.Checkout.Orders
                     {
                         warnings.Add(T("Order.BillingAddressMissing"));
                     }
-                    else if (!customer.BillingAddress.Email.IsEmail())
+                    else if (isGuest && !customer.BillingAddress.Email.IsEmail())
                     {
                         warnings.Add(T("Common.Error.InvalidEmail"));
                     }
@@ -280,7 +282,7 @@ namespace Smartstore.Core.Checkout.Orders
                         warnings.Add(T("Order.ShippingAddressMissing"));
                         throw new Exception();
                     }
-                    else if (!customer.ShippingAddress.Email.IsEmail())
+                    else if (isGuest && !customer.ShippingAddress.Email.IsEmail())
                     {
                         warnings.Add(T("Common.Error.InvalidEmail"));
                     }
@@ -1013,12 +1015,7 @@ namespace Smartstore.Core.Checkout.Orders
 
         private async Task FinalizeOrderPlacement(PlaceOrderContext ctx)
         {
-            _db.OrderNotes.Add(new()
-            {
-                OrderId = ctx.Order.Id,
-                Note = T("Admin.OrderNotice.OrderPlaced"),
-                CreatedOnUtc = DateTime.UtcNow
-            });
+            _db.OrderNotes.Add(ctx.Order, T("Admin.OrderNotice.OrderPlaced"));
 
             // Log activity.
             if (!ctx.PaymentRequest.IsRecurringPayment)

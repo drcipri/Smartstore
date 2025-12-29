@@ -181,14 +181,14 @@ namespace Smartstore.Web.Models.Cart
             {
                 var rewardPointsBalance = customer.GetRewardPointsBalance();
                 var rewardPointsAmountBase = _orderCalculationService.ConvertRewardPointsToAmount(rewardPointsBalance);
-                var rewardPointsAmount = _currencyService.ConvertFromPrimaryCurrency(rewardPointsAmountBase.Amount, currency);
+                var rpm = to.RewardPoints;
 
-                if (rewardPointsAmount > decimal.Zero)
+                rpm.RewardPointsAmount = _currencyService.ConvertFromPrimaryCurrency(rewardPointsAmountBase.Amount, currency);
+                if (rpm.RewardPointsAmount > decimal.Zero)
                 {
-                    to.RewardPoints.DisplayRewardPoints = true;
-                    to.RewardPoints.RewardPointsAmount = rewardPointsAmount.ToString(true);
-                    to.RewardPoints.RewardPointsBalance = rewardPointsBalance;
-                    to.RewardPoints.UseRewardPoints = customer.GenericAttributes.UseRewardPointsDuringCheckout;
+                    rpm.DisplayRewardPoints = true;
+                    rpm.RewardPointsBalance = rewardPointsBalance;
+                    rpm.UseRewardPoints = customer.GenericAttributes.UseRewardPointsDuringCheckout;
                 }
             }
 
@@ -265,7 +265,7 @@ namespace Smartstore.Web.Models.Cart
                     caModel.Values = [.. valuesModels
                         .Select(x => (ChoiceItemModel)x)
                         .OrderBy(x => x.DisplayOrder)
-                        .ThenNaturalBy(x => x.Name)];
+                        .ThenNaturalBy(_catalogSettings.SortAttributesNaturally ? x => x.Name : null)];
                 }
 
                 // Set already selected attributes.

@@ -155,6 +155,7 @@ namespace Smartstore.Web.Models.Cart
                     Active = cartItem.Active,
                     ProductId = product.Id,
                     ProductName = product.GetLocalized(x => x.Name),
+                    ProductSku = product.Sku,
                     ShortDesc = product.GetLocalized(x => x.ShortDescription),
                     ProductSeName = productSeName,
                     CreatedOnUtc = item.UpdatedOnUtc,
@@ -203,8 +204,6 @@ namespace Smartstore.Web.Models.Cart
 
                             bundleItemModel.ImageModel = new ImageModel(fileInfo, MediaSettings.ThumbnailSizeXxs)
                             {
-                                Title = file.MediaFile.GetLocalized(x => x.Title)?.Value.NullEmpty() ?? T("Media.Manufacturer.ImageLinkTitleFormat", bundleItemModel.ProductName),
-                                Alt = file.MediaFile.GetLocalized(x => x.Alt)?.Value.NullEmpty() ?? T("Media.Manufacturer.ImageAlternateTextFormat", bundleItemModel.ProductName),
                                 NoFallback = _catalogSettings.HideProductDefaultPictures,
                             };
                         }

@@ -1,6 +1,5 @@
 ﻿#nullable enable
 
-using Humanizer;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Routing;
@@ -85,7 +84,7 @@ namespace Smartstore.Web.Controllers
 
         public static string OrderDetailsPrintViewPath => "/{theme}/Views/Order/Details.Print.cshtml";
 
-        private async Task<ImageModel> PrepareOrderItemImageModelAsync(
+        public async Task<ImageModel> PrepareOrderItemImageModelAsync(
             Product product,
             int pictureSize,
             string productName,
@@ -139,7 +138,7 @@ namespace Smartstore.Web.Controllers
             return new ImageModel(file, pictureSize)
             {
                 Title = file?.File?.GetLocalized(x => x.Title)?.Value.NullEmpty() ?? T("Media.Product.ImageLinkTitleFormat", productName),
-                Alt = file?.File?.GetLocalized(x => x.Alt)?.Value.NullEmpty() ?? T("Media.Product.ImageAlternateTextFormat", productName),
+                Alt = file?.File?.GetLocalized(x => x.Alt)?.Value.NullEmpty() ?? productName,
                 NoFallback = catalogSettings.HideProductDefaultPictures
             };
         }
@@ -313,6 +312,9 @@ namespace Smartstore.Web.Controllers
             var customerCurrency = context?.Currencies?.Get(o.CustomerCurrencyCode) ??
                 await _db.Currencies.AsNoTracking().FirstOrDefaultAsync(x => x.CurrencyCode == o.CustomerCurrencyCode);
 
+            await _db.LoadReferenceAsync(o, x => x.Customer, false, q => q.Include(x => x.CustomerRoleMappings)
+                .ThenInclude(x => x.CustomerRole));
+
             var model = new OrderDetailsModel
             {
                 Order = o,
@@ -339,7 +341,7 @@ namespace Smartstore.Web.Controllers
 
                 if (o.ShippingAddress != null)
                 {
-                    model.ShippingAddress = await MapperFactory.MapAsync<Address, AddressModel>(o.ShippingAddress);
+                    model.ShippingAddress = await o.ShippingAddress.MapAsync(o.Customer);
                 }
 
                 // Shipments (only already shipped).
@@ -368,7 +370,7 @@ namespace Smartstore.Web.Controllers
 
             if (o.BillingAddress != null)
             {
-                model.BillingAddress = await MapperFactory.MapAsync<Address, AddressModel>(o.BillingAddress);
+                model.BillingAddress = await o.BillingAddress.MapAsync(o.Customer);
             }
 
             model.VatNumber = o.VatNumber;

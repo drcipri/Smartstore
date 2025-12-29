@@ -8,16 +8,19 @@ namespace Smartstore.Core.AI.Prompting
     {
         private readonly SmartDbContext _db;
         private readonly IStoreContext _storeContext;
+        private readonly IWorkContext _workContext;
         private readonly ILinkResolver _linkResolver;
 
         public AIMessageBuilder(
             SmartDbContext db,
             IStoreContext storeContext,
+            IWorkContext workContext,
             ILinkResolver linkResolver,
             AIMessageResources promptResources)
         {
             _db = db;
             _storeContext = storeContext;
+            _workContext = workContext;
             _linkResolver = linkResolver;
             Resources = promptResources;
         }
@@ -186,39 +189,100 @@ namespace Smartstore.Core.AI.Prompting
         /// <param name="chat">The <see cref="AIChat" /> containing a <see cref="List{AIChatMessage}"/> to which the generated message will be added.</param>
         public virtual AIChat BuildImagePrompt(IAIImageModel model, AIChat chat)
         {
-            var message = string.Empty;
+            const string icResRoot = "Admin.AI.ImageCreation.";
+            const string pfResRoot = "Admin.AI.ImageCreation.PromptFragment.";
 
-            if (model.Medium.HasValue())
+            // Attempts to load a resource fragment. Returns false if no ID exists.
+            bool TryGetFragment(string value, out string fragment)
             {
-                message += model.Medium + ", ";
+                fragment = null;
+
+                if (!value.HasValue())
+                    return false;
+
+                var id = GetResourceIdentifier(value);
+                if (id.HasValue())
+                {
+                    fragment = Resources.GetResource(pfResRoot + id).NullEmpty();
+                }
+
+                return fragment.HasValue();
             }
 
-            if (model.Environment.HasValue())
+            void AddMessage(string keySuffix, params object[] args)
             {
-                message += model.Environment + ", ";
+                chat.User(Resources.GetResource(icResRoot + keySuffix, args));
+            }
+            
+            // Processes single property prompts (e.g. Environment, Composition)
+            void ProcessSingle(string value, string keyRoot)
+            {
+                if (!value.HasValue()) 
+                    return;
+
+                if (TryGetFragment(value, out var fragment))
+                {
+                    AddMessage(keyRoot, fragment);
+                }
+                else
+                {
+                    AddMessage($"{keyRoot}.Fallback", value);
+                }
             }
 
-            if (model.Lighting.HasValue())
+            // Processes paired property prompts (e.g. Medium/Color, Lighting/Mood)
+            void ProcessPair(string val1, string val2, string root, string suffix1, string suffix2)
             {
-                message += model.Lighting + ", ";
+                bool has1 = val1.HasValue();
+                bool has2 = val2.HasValue();
+
+                if (!has1 && !has2) 
+                    return;
+
+                TryGetFragment(val1, out var frag1);
+                TryGetFragment(val2, out var frag2);
+
+                if (has1 && has2)
+                {
+                    if (frag1 != null && frag2 != null)
+                    {
+                        AddMessage(root, frag1, frag2);
+                    }
+                    else
+                    {
+                        AddMessage($"{root}.Fallback", val1, val2);
+                    }
+                }
+                else if (has1)
+                {
+                    if (frag1 != null)
+                    {
+                        AddMessage($"{root}.{suffix1}", frag1);
+                    }
+                    else
+                    {
+                        AddMessage($"{root}.{suffix1}.Fallback", val1);
+                    }
+                }
+                else
+                {
+                    if (frag2 != null)
+                    {
+                        AddMessage($"{root}.{suffix2}", frag2);
+                    }
+                    else
+                    {
+                        AddMessage($"{root}.{suffix2}.Fallback", val2);
+                    }
+                }
             }
 
-            if (model.Color.HasValue())
-            {
-                message += model.Color + ", ";
-            }
+            ProcessPair(model.Medium, model.Color, "Optic", "MediumOnly", "ColorOnly");
+            ProcessSingle(model.Environment, "Scene");
+            ProcessPair(model.Lighting, model.Mood, "Atmosphere", "LightingOnly", "MoodOnly");
+            ProcessSingle(model.Composition, "Staging");
 
-            if (model.Mood.HasValue())
-            {
-                message += model.Mood + ", ";
-            }
-
-            if (model.Composition.HasValue())
-            {
-                message += model.Composition;
-            }
-
-            return chat.User(message);
+            return chat;
         }
 
         /// <summary>
@@ -341,6 +405,7 @@ namespace Smartstore.Core.AI.Prompting
                 roleInstructions.AddRange(
                     Resources.WriteCompleteParagraphs(), 
                     Resources.UseImagePlaceholders(),
+                    Resources.CreateImagesOnlyOnExplicitRequest(),
                     Resources.CreatHtmlWithoutMarkdown(),
                     Resources.NoFriendlyIntroductions(),
                     Resources.StartWithDivTag()
@@ -479,6 +544,27 @@ namespace Smartstore.Core.AI.Prompting
             }
 
             return chat;
+        }
+
+        /// <summary>
+        /// Should return a partial ID of resource used to get a prompt fragement from resources.
+        /// </summary>
+        /// <param name="res">Localized setting e.g. draußen</param>
+        public string GetResourceIdentifier(string res)
+        {
+            var localRes = _db.LocaleStringResources
+                .AsNoTracking()
+                .Where(x =>
+                    // INFO: StartsWith is much faster than LIKE('%Value%')
+                    x.ResourceName.StartsWith("Admin.AI.ImageCreation.Param.")
+                    && x.ResourceValue == res 
+                    && x.LanguageId == _workContext.WorkingLanguage.Id)
+                .Select(x => x.ResourceName)
+                .FirstOrDefault();
+
+            var id = localRes?.Split('.').LastOrDefault();
+
+            return id;
         }
 
         #endregion

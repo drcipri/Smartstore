@@ -319,11 +319,23 @@ fieldset.content-group {
 // Link Builder (maybe move to custom file later)
 // ------------------------------------------------------
 
+.link-control {
+    min-width: 0;
+}
+
 .link-control > :is(.form-control, .select2) {
-	border-color: $input-border-color !important;
+    border-color: $input-border-color !important;
 }
 
 .link-control > .form-control:focus {
 	outline: 1px solid $input-focus-border-color;
 	outline-offset: -2px;
+}
+
+
+// Google reCAPTCHA
+// ------------------------------------------------------
+
+.grecaptcha-badge-hidden .grecaptcha-badge {
+    display: none !important;
 }

@@ -1,6 +1,6 @@
 /// <reference path="references.scss" />
 
-:is(a, button, .form-check-input, [tabindex="0"]):is(:focus-visible) {
+:is(#{unquote("a, button, .form-check-input, [tabindex=0]")}):is(#{unquote(":focus-visible")}) {
     outline: 0;
     box-shadow: $focus-ring-box-shadow;
 }
@@ -45,7 +45,20 @@
     overflow: visible;
 }
 
-#skip-to-content {
+.skip-content-container {
+    position: relative;
+    transform: scale(0);
+    opacity: 0;
+
+    &:focus-within {
+        transform: scale(1);
+        opacity: 1;
+        z-index: 999;
+    }
+}
+
+.btn-skip-content {
+    --btn-padding-x: 1.25rem;
     position: absolute;
     top: 0;
     inset-inline-start: 0;

@@ -9,7 +9,6 @@ using Smartstore.PayPal.Client;
 using Smartstore.PayPal.Client.Messages;
 using Smartstore.Web.Controllers;
 using Smartstore.Web.Modelling.Settings;
-using static Smartstore.PayPal.Module;
 
 namespace Smartstore.PayPal.Controllers
 {
@@ -55,15 +54,13 @@ namespace Smartstore.PayPal.Controllers
             }
 
             // Convert FundingOptions from settings to Array<int> so the corresponding taghelper in configure view can work with it.
-            model.FundingsCart = settings.FundingsCart
-                .SplitSafe(",")
-                .Select(x => ((int)x.Convert<FundingOptions>()).ToString())
-                .ToArray();
+            model.FundingsCart = [.. settings.FundingsCart
+                .SplitSafe(',')
+                .Select(x => ((int)x.Convert<FundingOptions>()).ToString())];
 
-            model.FundingsOffCanvasCart = settings.FundingsOffCanvasCart
-                .SplitSafe(",")
-                .Select(x => ((int)x.Convert<FundingOptions>()).ToString())
-                .ToArray();
+            model.FundingsOffCanvasCart = [.. settings.FundingsOffCanvasCart
+                .SplitSafe(',')
+                .Select(x => ((int)x.Convert<FundingOptions>()).ToString())];
 
             model.DisplayOnboarding = !settings.ClientId.HasValue() && !settings.Secret.HasValue();
 
@@ -93,8 +90,8 @@ namespace Smartstore.PayPal.Controllers
             MiniMapper.Map(model, settings);
 
             // Convert FundingOptions for cart & OffCanvasCart to comma separated string.
-            var fundingsCart = model.FundingsCart?.Select(x => x.Convert<FundingOptions>().ToString()) ?? Array.Empty<string>();
-            var fundingsOffCanvasCart = model.FundingsOffCanvasCart?.Select(x => x.Convert<FundingOptions>().ToString()) ?? Array.Empty<string>();
+            var fundingsCart = model.FundingsCart?.Select(x => x.Convert<FundingOptions>().ToString()) ?? [];
+            var fundingsOffCanvasCart = model.FundingsOffCanvasCart?.Select(x => x.Convert<FundingOptions>().ToString()) ?? [];
 
             settings.FundingsCart = string.Join(',', fundingsCart);
             settings.FundingsOffCanvasCart = string.Join(',', fundingsOffCanvasCart);

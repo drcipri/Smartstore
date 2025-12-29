@@ -33,7 +33,7 @@ namespace Smartstore.Core.AI
                 else if (string.Equals(name, nameof(AIChat.Messages), StringComparison.OrdinalIgnoreCase))
                 {
                     reader.Read();
-                    messages = serializer.Deserialize(reader, typeof(IReadOnlyList<AIChatMessage>)) as IReadOnlyList<AIChatMessage>;
+                    messages = serializer.Deserialize<IReadOnlyList<AIChatMessage>>(reader);
                 }
                 else if (string.Equals(name, nameof(AIChat.Metadata), StringComparison.OrdinalIgnoreCase))
                 {

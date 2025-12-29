@@ -31,7 +31,6 @@ namespace Smartstore.Web.Controllers
         private readonly HomePageSettings _homePageSettings;
         private readonly IMessageFactory _messageFactory;
         private readonly PrivacySettings _privacySettings;
-        private readonly CaptchaSettings _captchaSettings;
         private readonly CommonSettings _commonSettings;
         private readonly StoreInformationSettings _storeInformationSettings;
 
@@ -41,7 +40,6 @@ namespace Smartstore.Web.Controllers
             HomePageSettings homePageSettings,
             IMessageFactory messageFactory,
             PrivacySettings privacySettings,
-            CaptchaSettings captchaSettings,
             CommonSettings commonSettings,
             StoreInformationSettings storeInformationSettings)
         {
@@ -50,7 +48,6 @@ namespace Smartstore.Web.Controllers
             _homePageSettings = homePageSettings;
             _messageFactory = messageFactory;
             _privacySettings = privacySettings;
-            _captchaSettings = captchaSettings;
             _commonSettings = commonSettings;
             _storeInformationSettings = storeInformationSettings;
         }
@@ -93,7 +90,6 @@ namespace Smartstore.Web.Controllers
                 Email = Services.WorkContext.CurrentCustomer.Email,
                 FullName = Services.WorkContext.CurrentCustomer.GetFullName(),
                 FullNameRequired = _privacySettings.FullNameOnContactUsRequired,
-                DisplayCaptcha = _captchaSettings.CanDisplayCaptcha && _captchaSettings.ShowOnContactUsPage,
                 MetaKeywords = topic?.GetLocalized(x => x.MetaKeywords),
                 MetaDescription = topic?.GetLocalized(x => x.MetaDescription),
                 MetaTitle = topic?.GetLocalized(x => x.MetaTitle),
@@ -103,16 +99,11 @@ namespace Smartstore.Web.Controllers
         }
 
         [HttpPost, ActionName("ContactUs")]
-        [ValidateCaptcha(CaptchaSettingName = nameof(CaptchaSettings.ShowOnContactUsPage))]
+        [ValidateCaptcha(CaptchaSettings.Targets.ContactUs)]
         [ValidateHoneypot, GdprConsent]
         [LocalizedRoute("/contactus", Name = "ContactUs")]
-        public async Task<IActionResult> ContactUsSend(ContactUsModel model, string captchaError)
+        public async Task<IActionResult> ContactUsSend(ContactUsModel model)
         {
-            if (_captchaSettings.ShowOnContactUsPage && captchaError.HasValue())
-            {
-                ModelState.AddModelError(string.Empty, captchaError);
-            }
-
             if (ModelState.IsValid)
             {
                 var customer = Services.WorkContext.CurrentCustomer;
@@ -144,8 +135,6 @@ namespace Smartstore.Web.Controllers
 
                 return View(model);
             }
-
-            model.DisplayCaptcha = _captchaSettings.CanDisplayCaptcha && _captchaSettings.ShowOnContactUsPage;
 
             return View(model);
         }

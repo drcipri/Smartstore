@@ -31,6 +31,7 @@ namespace Smartstore.PayPal.Filters
             // Should only run on a full view rendering result or HTML ContentResult.
             if (filterContext.Result is StatusCodeResult || filterContext.Result.IsHtmlViewResult())
             {
+                // TODO: (mh) Calling Contains in a comma-separated string is not optimal. Refactor to use a list or enum flags. TBD with MC.
                 var fundings = _settings.FundingsOffCanvasCart;
 
                 // PayPalStandard
@@ -55,6 +56,12 @@ namespace Smartstore.PayPal.Filters
                 if (fundings.Contains(FundingOptions.googlepay.ToString()) && await _payPalHelper.IsProviderActiveAsync(PayPalConstants.GooglePay))
                 {
                     _widgetProvider.RegisterViewComponent<PayPalGooglePayViewComponent>("offcanvas_cart_summary");
+                }
+
+                // ApplePay
+                if (fundings.Contains(FundingOptions.applepay.ToString()) && await _payPalHelper.IsProviderActiveAsync(PayPalConstants.ApplePay))
+                {
+                    _widgetProvider.RegisterViewComponent<PayPalApplePayViewComponent>("offcanvas_cart_summary");
                 }
             }
 
